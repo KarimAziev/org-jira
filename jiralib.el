@@ -81,7 +81,7 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))
+
 (require 'cl-seq)
 (require 'soap-client)
 (require 'request)
@@ -108,6 +108,7 @@
 
 (defcustom jiralib-coding-system 'utf-8
   "Use custom coding system for Jiralib."
+  :type 'symbol
   :group 'jiralib)
 
 (defcustom jiralib-host ""
@@ -172,8 +173,7 @@ This will be used with USERNAME to compute password from
 (defvar jiralib-mode-map nil)
 (defvar jiralib-issue-regexp "\\<\\(?:[A-Za-z0-9]+\\)-[0-9]+\\>")
 
-(defcustom jiralib-wsdl-descriptor-url
-  ""
+(defcustom jiralib-wsdl-descriptor-url ""
   "The location for the WSDL descriptor for the JIRA service.
 This is specific to your local JIRA installation.  The URL is
 typically:
@@ -181,7 +181,7 @@ typically:
   http://YOUR_INSTALLATION/rpc/soap/jirasoapservice-v2?wsdl
 
 The default value works if JIRA is located at a hostname named
-'jira'."
+`jira'."
   :type 'string
   :group 'jiralib)
 
@@ -191,9 +191,9 @@ The default value works if JIRA is located at a hostname named
   :type 'string
   :group 'jiralib)
 
-(defcustom jiralib-agile-page-size
-  50
-  "Page size for agile API retrieve. Limited by server property jira.search.views.default.max"
+(defcustom jiralib-agile-page-size 50
+  "Page size for agile API retrieve.
+Limited by server property jira.search.views.default.max"
   :type 'integer
   :group 'jiralib)
 
@@ -206,42 +206,61 @@ This is maintained by `jiralib-login'.")
 
 (defvar jiralib-wsdl nil)
 
-(defcustom jiralib-worklog-import--filters-alist
-  (list
-   '(nil "WorklogUpdatedByCurrentUser"
-         (lambda (wl)
-           (let-alist wl
-             (when
-                 (and wl
-                      (string-equal
-                       (downcase
-                        (or jiralib-user-login-name user-login-name ""))
-                       (downcase (or .updateAuthor.name
-                                     (car (split-string (or .updateAuthor.emailAddress "") "@"))
-                                     ""))))
-               wl))))
-   '(nil "WorklogAuthoredByCurrentUser"
-         (lambda (wl)
-           (let-alist wl
-             (when
-                 (and wl
-                      (string-equal
-                       (downcase
-                        (or jiralib-user-login-name user-login-name))
-                       (downcase (or .author.name
-                                     (car (split-string (or .author.emailAddress "") "@"))))))
-               wl)))))
-  "A list of triplets: ('Global-Enable 'Descriptive-Label 'Function-Definition)
-that apply worklog predicate filters during import.
+(defcustom jiralib-worklog-import--filters-alist (list
+                                                  '(nil
+                                                    "WorklogUpdatedByCurrentUser"
+                                                    (lambda (wl)
+                                                      (let-alist wl
+                                                        (when (and wl
+                                                                   (string-equal
+                                                                    (downcase
+                                                                     (or
+                                                                      jiralib-user-login-name
+                                                                      user-login-name
+                                                                      ""))
+                                                                    (downcase
+                                                                     (or
+                                                                      .updateAuthor.name
+                                                                      (car
+                                                                       (split-string
+                                                                        (or
+                                                                         .updateAuthor.emailAddress
+                                                                         "")
+                                                                        "@"))
+                                                                      ""))))
+                                                          wl))))
+                                                  '(nil
+                                                    "WorklogAuthoredByCurrentUser"
+                                                    (lambda (wl)
+                                                      (let-alist wl
+                                                        (when (and wl
+                                                                   (string-equal
+                                                                    (downcase
+                                                                     (or
+                                                                      jiralib-user-login-name
+                                                                      user-login-name))
+                                                                    (downcase
+                                                                     (or
+                                                                      .author.name
+                                                                      (car
+                                                                       (split-string
+                                                                        (or
+                                                                         .author.emailAddress
+                                                                         "")
+                                                                        "@"))))))
+                                                          wl)))))
+  "A list of triplets: (Global-Enable Descriptive-Label Function-Definition).
+It is applied to worklog predicate filters during import.
 
-Example: (list '('t \"descriptive-predicate-label\" (lambda (x) x)))"
+Example: \\=(list \\='(\\='t \"descriptive-predicate-label\" (lambda (x) x)))"
   :type '(repeat (list boolean string function))
   :group 'org-jira)
 
 
 (defcustom jiralib-update-issue-fields-exclude-list nil
   "A list of symbols to check for exclusion on updates based on matching key.
-Key names should be one of components, description, assignee, reporter, summary, issuetype."
+Key names should be one of components, description, assignee, reporter,
+summary, issuetype."
   :type '(set (const :tag "Exclude components" components)
               (const :tag "Exclude description" description)
               (const :tag "Exclude assignee" assignee)
@@ -308,7 +327,7 @@ method ensures the user is logged in and invokes `soap-invoke'
 with the correct service name and authentication token.
 
 All JIRA interface methods take an authentication token as the
-first argument.  The authentication token is supplied by this
+car argument.  The authentication token is supplied by this
 function, so PARAMS should omit this parameter.  For example, the
 \"getIssue\" method takes two parameters: auth and key, however,
 when invoking it through `jiralib-call', the call should be:
@@ -329,117 +348,163 @@ as such, the CALLBACK should follow this type of form:
 If CALLBACK is set to nil then the request will occur with sync.
 This produces a noticeable slowdown and is not recommended by
 request.el, so if at all possible, it should be avoided."
+  (require 'org-jira)
   ;; @TODO :auth: Probably pass this all the way down, but I think
   ;; it may be OK at the moment to just set the variable each time.
-  
   (setq jiralib-complete-callback
-        ;; Don't run with async if we don't have a login token yet.
+  ;; Don't run with async if we don't have a login token yet.
         (if jiralib-token callback nil))
 
-  ;; If we don't have a regex set, ensure it is set BEFORE any async
-  ;; calls are processing, or we're going to have a bad time.
-  ;; This should only end up running once per session.
+;; If we don't have a regex set, ensure it is set BEFORE any async
+;; calls are processing, or we're going to have a bad time.
+;; This should only end up running once per session.
   (unless jiralib-issue-regexp
-    (let ((projects (mapcar (lambda (e) (downcase (cdr (assoc 'key e))))
+    (let ((projects (mapcar (lambda (e)
+                              (downcase (cdr (assoc 'key e))))
                             (append (jiralib--rest-call-it
                                      "/rest/api/2/project"
                                      :params '((expand . "description,lead,url,projectKeys")))
-                                    nil)
-                            )))
+                                    nil))))
       (when projects
         (setq jiralib-issue-regexp
               (concat "\\<" (regexp-opt projects) "-[0-9]+\\>")))))
-
   (if (not jiralib-use-restapi)
       (car (apply 'jiralib--call-it method params))
     (unless jiralib-token
       (call-interactively 'jiralib-login))
-    (cl-case (intern method)
+    (pcase (intern method)
       ('getStatuses (jiralib--rest-call-it "/rest/api/2/status"))
       ('getIssueTypes (jiralib--rest-call-it "/rest/api/2/issuetype"))
       ('getSubTaskIssueTypes (jiralib--rest-call-it "/rest/api/2/issuetype"))
       ('getIssueTypesByProject
-       (let ((response (jiralib--rest-call-it (format "/rest/api/2/project/%s" (first params)))))
+       (let ((response
+              (jiralib--rest-call-it
+               (format "/rest/api/2/project/%s"
+                       (car
+                        params)))))
          (cl-coerce (cdr (assoc 'issueTypes response)) 'list)))
-      ('getUser (jiralib--rest-call-it "/rest/api/2/user" :params `((accountId . ,(first params)))))
-      ('getVersions (jiralib--rest-call-it (format "/rest/api/2/project/%s/versions" (first params))))
+      ('getUser
+       (jiralib--rest-call-it "/rest/api/2/user" :params
+                              `((accountId .
+                                           ,(car
+                                             params)))))
+      ('getVersions
+       (jiralib--rest-call-it
+        (format
+         "/rest/api/2/project/%s/versions"
+         (car
+          params))))
 
-      ;; Worklog calls
+;; Worklog calls
       ('getWorklogs
-       (jiralib--rest-call-it (format "/rest/api/2/issue/%s/worklog" (first params))))
-
+       (jiralib--rest-call-it (format "/rest/api/2/issue/%s/worklog" (car
+                                                                      params))))
       ('addWorklog
-       (jiralib--rest-call-it (format "/rest/api/2/issue/%s/worklog" (first params))
+       (jiralib--rest-call-it (format "/rest/api/2/issue/%s/worklog" (car
+                                                                      params))
                               :type "POST"
-                              :data (json-encode (second params))))
-
+                              :data (json-encode (cadr params))))
       ('updateWorklog
-       (jiralib--rest-call-it (format "/rest/api/2/issue/%s/worklog/%s" (first params) (second params))
+       (jiralib--rest-call-it (format "/rest/api/2/issue/%s/worklog/%s" (car
+                                                                         params)
+                                      (cadr params))
                               :type "PUT"
-                              :data (json-encode (third params))))
-
+                              :data (json-encode (caddr params))))
       ('addWorklogAndAutoAdjustRemainingEstimate
-       (jiralib--rest-call-it (format "/rest/api/2/issue/%s/worklog" (first params))
+       (jiralib--rest-call-it (format "/rest/api/2/issue/%s/worklog" (car
+                                                                      params))
                               :type "POST"
-                              :data (json-encode (second params))))
-
+                              :data (json-encode (cadr params))))
       ('addComment (jiralib--rest-call-it
-                    (format "/rest/api/2/issue/%s/comment" (first params))
+                    (format "/rest/api/2/issue/%s/comment" (car params))
                     :type "POST"
-                    :data (json-encode (second params))))
+                    :data (json-encode (cadr params))))
       ('createIssue
-       ;; Creating the issue doesn't return it, a second call must be
-       ;; made to pull it in by using the self key in response.
+      ;; Creating the issue doesn't return it, a cadr call must be
+      ;; made to pull it in by using the self key in response.
        (let ((response (jiralib--rest-call-it
                         "/rest/api/2/issue"
                         :type "POST"
-                        :data (json-encode (first params)))))
-         (jiralib--rest-call-it (cdr (assoc 'self response)) :type "GET")
-         ))
+                        :data (json-encode (car params)))))
+         (jiralib--rest-call-it (cdr (assoc 'self response)) :type "GET")))
       ('createIssueWithParent
        (let ((response (jiralib--rest-call-it
                         "/rest/api/2/issue"
                         :type "POST"
-                        :data (json-encode (first params)))))
-         (jiralib--rest-call-it (cdr (assoc 'self response)) :type "GET")
-         ))
+                        :data (json-encode (car params)))))
+         (jiralib--rest-call-it (cdr (assoc 'self response)) :type "GET")))
       ('editComment (jiralib--rest-call-it
-                     (format "/rest/api/2/issue/%s/comment/%s" (first params) (second params))
-                     :data (json-encode `((body . ,(third params))))
+                     (format "/rest/api/2/issue/%s/comment/%s" (car params)
+                             (cadr params))
+                     :data (json-encode `((body . ,(caddr params))))
                      :type "PUT"))
-      ('getBoard  (jiralib--rest-call-it (format "/rest/agile/1.0/board/%s"  (first params))))
-      ('getBoards (apply 'jiralib--agile-call-it "/rest/agile/1.0/board" 'values params))
-      ('getComment (org-jira-find-value
-                     (jiralib--rest-call-it
-                      (format "/rest/api/2/issue/%s/comment/%s" (first params) (second params)))
-                     'comments))
-      ('getComments (org-jira-find-value
-                     (jiralib--rest-call-it
-                      (format "/rest/api/2/issue/%s/comment" (first params)))
-                     'comments))
-      ('getAttachmentsFromIssue (org-jira-find-value
-                                 (jiralib--rest-call-it
-                                  (format "/rest/api/2/issue/%s?fields=attachment" (first params)))
-                                 'comments))
+      ('getBoard
+       (jiralib--rest-call-it
+        (format "/rest/agile/1.0/board/%s"
+                (car
+                 params))))
+      ('getBoards (apply 'jiralib--agile-call-it "/rest/agile/1.0/board" 'values
+                         params))
+      ('getComment
+       (when (fboundp 'org-jira-find-value)
+         (org-jira-find-value
+          (jiralib--rest-call-it
+           (format "/rest/api/2/issue/%s/comment/%s" (car params)
+                   (cadr params)))
+          'comments)))
+      ('getComments
+       (when (fboundp 'org-jira-find-value)
+         (org-jira-find-value
+          (jiralib--rest-call-it
+           (format "/rest/api/2/issue/%s/comment" (car params)))
+          'comments)))
+      ('getAttachmentsFromIssue
+       (when (fboundp 'org-jira-find-value)
+         (org-jira-find-value
+          (jiralib--rest-call-it
+           (format
+            "/rest/api/2/issue/%s?fields=attachment"
+            (car
+             params)))
+          'comments)))
       ('getComponents (jiralib--rest-call-it
-                       (format "/rest/api/2/project/%s/components" (first params))))
+                       (format "/rest/api/2/project/%s/components"
+                               (car params))))
       ('getIssue (jiralib--rest-call-it
-                  (format "/rest/api/2/issue/%s" (first params))))
+                  (format "/rest/api/2/issue/%s" (car params))))
       ('getIssuesFromBoard  (apply 'jiralib--agile-call-it
-				   (format "rest/agile/1.0/board/%d/issue" (first params))
-				   'issues
-				   (cdr params)))
-      ('getSprintsFromBoard  (jiralib--rest-call-it (format "/rest/agile/1.0/board/%s/sprint"  (first params))))
+                                   (format "rest/agile/1.0/board/%d/issue"
+                                           (car
+                                            params))
+                                   'issues
+                                   (cdr params)))
+      ('getSprintsFromBoard
+       (jiralib--rest-call-it
+        (format
+         "/rest/agile/1.0/board/%s/sprint"
+         (car
+          params))))
       ('getIssuesFromSprint  (apply 'jiralib--agile-call-it
-				   (format "rest/agile/1.0/sprint/%d/issue" (first params))
-				   'issues
-				   (cdr params)))
-      ('getIssuesFromJqlSearch  (append (cdr ( assoc 'issues (jiralib--rest-call-it
-                                                              "/rest/api/2/search"
-                                                              :type "POST"
-                                                              :data (json-encode `((jql . ,(first params))
-                                                                                   (maxResults . ,(second params)))))))
-                                        nil))
+                                    (format "rest/agile/1.0/sprint/%d/issue"
+                                            (car
+                                             params))
+                                    'issues
+                                    (cdr params)))
+      ('getIssuesFromJqlSearch  (append
+                                 (cdr
+                                  (assoc 'issues
+                                         (jiralib--rest-call-it
+                                          "/rest/api/2/search"
+                                          :type "POST"
+                                          :data
+                                          (json-encode
+                                           `((jql
+                                              . ,(car params))
+                                             (maxResults
+                                              .
+                                              ,(cadr
+                                                params)))))))
+                                 nil))
       ('getPriorities (jiralib--rest-call-it
                        "/rest/api/2/priority"))
       ('getProjects (jiralib--rest-call-it "rest/api/2/project"))
@@ -452,27 +517,60 @@ request.el, so if at all possible, it should be avoided."
        (mapcar
         (lambda (trans)
           `(,(assoc 'name trans) ,(assoc 'id trans)))
-        (cdadr (jiralib--rest-call-it (format "/rest/api/2/issue/%s/transitions" (first params))))))
-      ('getFieldsForAction (org-jira-find-value (car (let ((issue (first params))
-                                                           (action (second params)))
-                                                       (seq-filter (lambda (trans)
-                                                                     (or (string-equal action (org-jira-find-value trans 'id))
-                                                                         (string-equal action (org-jira-find-value trans 'name))))
-                                                                   (cdadr (jiralib--rest-call-it
-                                                                           (format "/rest/api/2/issue/%s/transitions" (first params))
-                                                                           :params '((expand . "transitions.fields")))))))
-                                                'fields))
-      ('progressWorkflowAction (jiralib--rest-call-it
-                                (format "/rest/api/2/issue/%s/transitions" (first params))
-                                :type "POST"
-                                :data (json-encode `(,(car (second params)) ,(car (third params))))))
+        (cdadr
+         (jiralib--rest-call-it
+          (format "/rest/api/2/issue/%s/transitions"
+                  (car
+                   params))))))
+      ('getFieldsForAction
+       (when (fboundp 'org-jira-find-value)
+         (org-jira-find-value
+          (car
+           (let ((issue (car params))
+                 (action (cadr
+                          params)))
+             (seq-filter
+              (lambda
+                (trans)
+                (or (string-equal
+                     action (org-jira-find-value
+                             trans 'id))
+                    (string-equal
+                     action (org-jira-find-value
+                             trans
+                             'name))))
+              (cdadr
+               (jiralib--rest-call-it
+                (format
+                 "/rest/api/2/issue/%s/transitions"
+                 (car
+                  params))
+                :params
+                '((expand . "transitions.fields")))))))
+          'fields)))
+      ('progressWorkflowAction
+       (jiralib--rest-call-it
+        (format "/rest/api/2/issue/%s/transitions"
+                (car
+                 params))
+        :type "POST"
+        :data
+        (json-encode
+         `(,(car (cadr params))
+           ,(car
+             (caddr
+              params))))))
       ('getUsers
-       (jiralib--rest-call-it (format "/rest/api/2/user/assignable/search?project=%s&maxResults=10000" (first params))
-                              :type "GET"))
+       (jiralib--rest-call-it
+        (format
+         "/rest/api/2/user/assignable/search?project=%s&maxResults=10000"
+         (car
+          params))
+        :type "GET"))
       ('updateIssue (jiralib--rest-call-it
-                     (format "/rest/api/2/issue/%s" (first params))
+                     (format "/rest/api/2/issue/%s" (car params))
                      :type "PUT"
-                     :data (json-encode `((fields . ,(second params)))))))))
+                     :data (json-encode `((fields . ,(cadr params)))))))))
 
 (defun jiralib--soap-call-it (&rest args)
   "Deprecated SOAP call endpoint.  Will be removed soon.
@@ -501,27 +599,51 @@ passing ARGS to REQUEST."
          args))
   (append (request-response-data
            (apply #'request (if (string-match "^http[s]*://" api) api ;; If an absolute path, use it
-                              (concat (replace-regexp-in-string "/*$" "/" jiralib-url)
+                              (concat (replace-regexp-in-string "/*$" "/"
+                                                                jiralib-url)
                                       (replace-regexp-in-string "^/*" "" api)))
                   :sync (not jiralib-complete-callback)
-                  :headers `(,jiralib-token ("Content-Type" . "application/json"))
+                  :headers `(,jiralib-token
+                             ("Content-Type" . "application/json"))
                   :parser 'jiralib--json-read
                   :complete jiralib-complete-callback
                   ;; Ensure we have useful errors
                   :error
-                  (lexical-let
-                      ((my-api api)
-                       (my-args args))
-                    (cl-function
-                       (lambda (&key data &allow-other-keys)
-                         (print "JIRA_ERROR - see your *Messages* buffer for more details.")
-                         (print "JIRA_ERROR REQUEST: ")
-                         (print my-api)
-                         (print my-args)
-                         (print "JIRA_ERROR RESPONSE: ")
-                         (print data)
-                         (error "JIRA_ERROR - see your *Messages* buffer for more details.")
-                         )))
+                  (let ((--cl-my-api--
+                         (make-symbol "--my-api--"))
+                        (--cl-my-args--
+                         (make-symbol "--my-args--")))
+                    (progn
+                      (let* ((v --cl-my-api--))
+                        (set v api))
+                      (let* ((v --cl-my-args--))
+                        (set v args)))
+                    (list 'lambda
+                          '(&rest --cl-rest--)
+                          '"\n\n(fn &key DATA &allow-other-keys)"
+                          (list 'apply
+                                (list 'function
+                                      #'(lambda
+                                          (G984 G985 &rest --cl-rest--)
+                                          (let* ((data
+                                                  (car
+                                                   (cdr
+                                                    (plist-member --cl-rest-- ':data)))))
+                                            (progn
+                                              (print
+                                               "JIRA_ERROR - see your *Messages* buffer for more details.")
+                                              (print "JIRA_ERROR REQUEST: ")
+                                              (print
+                                               (symbol-value G985))
+                                              (print
+                                               (symbol-value G984))
+                                              (print "JIRA_ERROR RESPONSE: ")
+                                              (print data)
+                                              (error
+                                               "JIRA_ERROR - see your *Messages* buffer for more details.")))))
+                                (list 'quote --cl-my-args--)
+                                (list 'quote --cl-my-api--)
+                                '--cl-rest--)))
                   args))
           nil))
 
@@ -529,7 +651,7 @@ passing ARGS to REQUEST."
   "Invoke the JIRA METHOD with supplied PARAMS.
 
 Internal use, returns a list of responses, of which only the
-first is normally used."
+car is normally used."
   (when (symbolp method)
     (setq method (symbol-name method)))
   (unless jiralib-token
@@ -644,7 +766,7 @@ This endpoint is essentially a master reference for when issue
 types need a name lookup when given an id.
 
 For applying issue types to a given project that is being created, see
-the #'jiralib-get-issue-types-by-project call."
+the \\=#'jiralib-get-issue-types-by-project call."
   (unless jiralib-issue-types-cache
     (setq jiralib-issue-types-cache
           (jiralib-make-assoc-list (jiralib-call "getIssueTypes" nil) 'id 'name)))
@@ -754,7 +876,9 @@ This runs the getAvailableActions SOAP method."
                                  (let ((namestring (cdr (car x)))
                                        (id (cdr x)))
                                    (cons
-                                    (cons 'name (org-jira-decode namestring))
+                                    (cons 'name
+                                          (when (fboundp 'org-jira-decode)
+                                            (org-jira-decode namestring)))
                                     id)))
                                (jiralib-call "getAvailableActions" nil issue-key))
                        'id 'name))
@@ -766,7 +890,9 @@ This runs the getAvailableActions SOAP method."
                  (let ((namestring (cdr (car x)))
                        (id (cdr x)))
                    (cons
-                    (cons 'name (org-jira-decode namestring))
+                    (cons 'name
+                          (when (fboundp 'org-jira-decode)
+                            (org-jira-decode namestring)))
                     id)))
                (jiralib-call "getAvailableActions" nil issue-key))
        'id 'name))))
@@ -797,13 +923,18 @@ Possible side-effects:
 
 (defun jiralib-get-fields-for-action (issue-key action-id)
   "Return the required fields to change ISSUE-KEY to ACTION-ID."
+  (require 'org-jira)
   (if jiralib-use-restapi
-      (let ((fields (jiralib-get-fields-for-action-with-cache issue-key action-id)))
+      (let ((fields (jiralib-get-fields-for-action-with-cache issue-key
+                                                              action-id)))
         (mapcar (lambda (field)
                   (cons (symbol-name (car field))
                         (format "%s (required: %s)"
-                                (org-jira-find-value field 'name)
-                                (if (eq (org-jira-find-value field 'required) :json-false)
+                                (when (fboundp 'org-jira-find-value)
+                                  (org-jira-find-value field 'name))
+                                (if (eq (when (fboundp 'org-jira-find-value)
+                                          (org-jira-find-value field 'required))
+                                        :json-false)
                                     "nil"
                                   "t"))))
                 fields))
@@ -811,8 +942,9 @@ Possible side-effects:
      (jiralib-get-fields-for-action-with-cache issue-key action-id)
      'id 'name)))
 
-(defun jiralib-progress-workflow-action (issue-key action-id params &optional callback)
-  "Progress issue with ISSUE-KEY to action ACTION-ID, and provide the needed PARAMS.
+(defun jiralib-progress-workflow-action (issue-key action-id params &optional
+                                                   callback)
+  "Progress issue with ISSUE-KEY to action ACTION-ID with the needed PARAMS.
 
 When CALLBACK is present, this will run async."
   (if jiralib-use-restapi
@@ -820,7 +952,8 @@ When CALLBACK is present, this will run async."
                     callback issue-key `((transition (id . ,action-id)))
                     `((fields . ,params)))
     (jiralib-call "progressWorkflowAction"
-                  callback issue-key action-id (jiralib-make-remote-field-values params))))
+                  callback issue-key action-id (jiralib-make-remote-field-values
+                                                params))))
 
 
 (defun jiralib-format-datetime (&optional datetime)
@@ -834,7 +967,7 @@ for being consumed in the Jira API.
 
 If DATETIME is not passed in, it will default to the current time."
   (let* ((defaults (format-time-string "%Y-%m-%d %H:%M:%S" (current-time)))
-         (datetime (concat datetime (subseq defaults (length datetime))))
+         (datetime (concat datetime (cl-subseq defaults (length datetime))))
          (parts (parse-time-string datetime)))
     (format "%04d-%02d-%02dT%02d:%02d:%02d.000+0000"
             (nth 5 parts)
@@ -942,10 +1075,12 @@ Return nil if the field is not found"
         return (cdr (assoc 'displayName user))))
 
 (defun jiralib-get-user-account-id (project full-name)
-    "Return the account-id (accountId) of the user with FULL-NAME (displayName) in PROJECT."
+  "Return the account-id of the user with FULL-NAME in PROJECT.
+ FULL-NAME is displayName field.
+Account-id is accountId field."
   (cl-loop for user in (jiralib-get-users project)
-        when (rassoc full-name user)
-        return (cdr (assoc 'accountId user))))
+           when (rassoc full-name user)
+           return (cdr (assoc 'accountId user))))
 
 (defun jiralib-get-filter (filter-id)
   "Return a filter given its FILTER-ID."
@@ -1090,7 +1225,8 @@ Return no more than MAX-NUM-RESULTS."
   (jiralib-make-assoc-list (jiralib-call "getSavedFilters" nil) 'id 'name))
 
 (defun jiralib-get-server-info ()
-  "Return the Server information such as baseUrl, version, edition, buildDate, buildNumber."
+  "Return the Server information.
+Server information includes baseUrl, version, edition, buildDate, buildNumber."
   (jiralib-call "getServerInfo" nil))
 
 (defun jiralib-get-sub-task-issue-types ()
@@ -1109,8 +1245,10 @@ Return no more than MAX-NUM-RESULTS."
   (unless jiralib-users-cache
     (setq jiralib-users-cache
           (jiralib-call "getUsers" nil project-key))
-    (cl-loop for (name . id) in org-jira-users do
-          (setf jiralib-users-cache (append (list (jiralib-get-user id)) jiralib-users-cache))))
+    (when (boundp 'org-jira-users)
+      (cl-loop for (name . id) in org-jira-users do
+               (setf jiralib-users-cache (append (list (jiralib-get-user id))
+                                                 jiralib-users-cache)))))
   jiralib-users-cache)
 
 (defun jiralib-get-versions (project-key)
@@ -1121,30 +1259,35 @@ Return no more than MAX-NUM-RESULTS."
   "Remove carriage returns from STRING."
   (when string (replace-regexp-in-string "\r" "" string)))
 
-(defun jiralib-worklog-import--filter-apply
-    (worklog-obj &optional predicate-fn-lst unwrap-worklog-records-fn rewrap-worklog-records-fn)
+(defun jiralib-worklog-import--filter-apply (worklog-obj &optional
+                                                         predicate-fn-lst
+                                                         unwrap-worklog-records-fn
+                                                         rewrap-worklog-records-fn)
   "Remove non-matching org-jira issue worklogs.
 
 Variables:
   WORKLOG-OBJ is the passed in object
   PREDICATE-FN-LST is the list of lambdas used as match predicates.
-  UNWRAP-WORKLOG-RECORDS-FN is the function used to produce the list of worklog records from within the worklog-obj
-  REWRAP-WORKLOG-RECORDS-FN is the function used to reshape the worklog records back into the form they were received in.
+  UNWRAP-WORKLOG-RECORDS-FN is the function used to produce the
+ list of worklog records from within the worklog-obj
+  REWRAP-WORKLOG-RECORDS-FN is the function used to reshape the worklog
+records back into the form they were received in.
 
 Auxiliary Notes:
   Only the WORKLOG-OBJ variable is required.
-  The value of PPREDICATE-FN-LST is filled from the jiralib-worklog-import--filters-alist variable by default.
+  The value of PPREDICATE-FN-LST is filled from the
+jiralib-worklog-import--filters-alist variable by default.
   If PREDICATE-FN-LST is empty the unmodified value of WORKLOG-OBJ is returned.
-  If PREDICATE-FN-LST contains multiple predicate functions, each predicate filters operates as a clause in an AND match.  In effect, a worklog must match all predicates to be returned.
-  The variable 'jiralib-user-login-name is used by many lambda filters."
-
-  (let
-      ((unwrap-worklog-records-fn)
-       (rewrap-worklog-records-fn)
-       (predicate-fn-lst)
-       (worklogs worklog-obj)
-       (predicate-fn))
-    ;; let-body
+  If PREDICATE-FN-LST contains multiple predicate functions, each predicate
+filters operates as a clause in an AND match.
+In effect, a worklog must match all predicates to be returned.
+The variable jiralib-user-login-name is used by many lambda filters."
+  (let ((unwrap-worklog-records-fn)
+        (rewrap-worklog-records-fn)
+        (predicate-fn-lst)
+        (worklogs worklog-obj)
+        (predicate-fn))
+        ;; let-body
     (progn
       (setq unwrap-worklog-records-fn
             (if (and
@@ -1167,12 +1310,13 @@ Auxiliary Notes:
                       (remove 'nil
                               (mapcar (lambda (x) (unless (null (car x)) x))
                                       jiralib-worklog-import--filters-alist)))))
-      ;; final condition/sanity checks before processing
-      (cond
-       ;; pass cases, don't apply filters, return unaltered worklog-obj
-       ((or (not (boundp 'predicate-fn-lst)) (not (listp predicate-fn-lst)) (null predicate-fn-lst))
+                                      ;; final condition/sanity checks before processing
+      (cond ;; pass cases, don't apply filters, return unaltered worklog-obj
+       ((or (not (boundp 'predicate-fn-lst))
+            (not (listp predicate-fn-lst))
+            (null predicate-fn-lst))
         worklog-obj)
-       ;; default-case, apply worklog filters and return only matching worklogs
+        ;; default-case, apply worklog filters and return only matching worklogs
        (t
         (setq worklogs (funcall unwrap-worklog-records-fn worklogs))
         (while (setq predicate-fn (pop predicate-fn-lst))
@@ -1195,36 +1339,36 @@ Auxiliary Notes:
 (defun jiralib-get-sprint-issues (id &rest params)
   "Return list of issues in the specified sprint"
   (apply 'jiralib-call "getIssuesFromSprint"
-	 (cl-getf params :callback) id params))
+   (cl-getf params :callback) id params))
 
 (defun jiralib-get-board-issues (board-id &rest params)
   "Return list of jira issues in the specified jira board"
   (apply 'jiralib-call "getIssuesFromBoard"
-	 (cl-getf params :callback) board-id params))
+   (cl-getf params :callback) board-id params))
 
 (defun jiralib--agile-not-last-entry (num-entries total start-at limit)
   "Return true if need to retrieve next page from agile api"
   (and (> num-entries 0)
        (or (not limit) ; not required to be set
-	   (< limit 1) ; ignore invalid limit
-	   (> limit start-at))
+     (< limit 1) ; ignore invalid limit
+     (> limit start-at))
        (or (not total) ; not always returned
            (> total start-at))))
 
 (defun jiralib--agile-limit-page-size (page-size start-at limit)
   (if (and limit
-	   (> (+ start-at page-size) limit))
+     (> (+ start-at page-size) limit))
       (- limit  start-at)
     page-size))
 
 
 (defun jiralib--agile-rest-call-it (api max-results start-at limit query-params)
   (let ((callurl
-	 (format "%s?%s" api
-		 (url-build-query-string
-		  (append `((maxResults ,(jiralib--agile-limit-page-size max-results start-at limit))
-			    (startAt ,start-at))
-			  query-params)))))
+   (format "%s?%s" api
+     (url-build-query-string
+      (append `((maxResults ,(jiralib--agile-limit-page-size max-results start-at limit))
+          (startAt ,start-at))
+        query-params)))))
     (jiralib--rest-call-it callurl)))
 
 (defun jiralib--agile-call-it (api values-key &rest params)
@@ -1265,14 +1409,14 @@ PARAMS - extra parameters (as keyword arguments), the supported parameters are:
   (setq jiralib-complete-callback nil)
   (let ((not-last t)
         (start-at 0)
-	(limit (cl-getf params :limit))
-	(query-params (cl-getf params :query-params))
-	;; maximum page size, 50 is server side maximum
+  (limit (cl-getf params :limit))
+  (query-params (cl-getf params :query-params))
+  ;; maximum page size, 50 is server side maximum
         (max-results jiralib-agile-page-size)
         (values ()))
     (while not-last
       (let* ((reply-alist
-	      (jiralib--agile-rest-call-it api max-results start-at limit query-params))
+        (jiralib--agile-rest-call-it api max-results start-at limit query-params))
              (values-array (cdr (assoc values-key reply-alist)))
              (num-entries (length values-array))
              (total (cdr (assq 'total reply-alist))))
@@ -1281,7 +1425,7 @@ PARAMS - extra parameters (as keyword arguments), the supported parameters are:
         (setf not-last (jiralib--agile-not-last-entry num-entries total start-at limit))))
     values))
 
-(defun jiralib--agile-call-async  (api values-key &rest params)
+(defun jiralib--agile-call-async (api values-key &rest params)
   "Asyncroniously invoke Jira agile method api,
 retrieve all the results using paging and call
 JIRALIB-COMPLETE_CALLBACK when all the data are retrieved.
@@ -1291,18 +1435,17 @@ VALUES-KEY - key of the actual reply data in the reply assoc list.
 PARAMS - extra parameters (as keyword arguments), the supported parameters are:
 
 limit - limit total number of retrieved entries."
-  (lexical-let
-      ((start-at 0)
-       (limit (cl-getf params :limit))
-       (query-params (cl-getf params :query-params))
-       ;; maximum page size, 50 is server side maximum
-       (max-results jiralib-agile-page-size)
-       (values-list ())
-       (vk values-key)
-       (url api)
-       ;; save the call back to be called later after the last page
-       (complete-callback jiralib-complete-callback))
-    ;; setup new callback to be called after each page
+  (let ((start-at 0)
+        (limit (cl-getf params :limit))
+        (query-params (cl-getf params :query-params))
+        ;; maximum page size, 50 is server side maximum
+        (max-results jiralib-agile-page-size)
+        (values-list ())
+        (vk values-key)
+        (url api)
+        ;; save the call back to be called later after the last page
+        (complete-callback jiralib-complete-callback))
+        ;; setup new callback to be called after each page
     (setf jiralib-complete-callback
           (cl-function
            (lambda  (&rest data &allow-other-keys)
@@ -1311,21 +1454,27 @@ limit - limit total number of retrieved entries."
                         (values-array (cdr (assoc vk reply-alist)))
                         (num-entries (length values-array))
                         (total (cdr (assq 'total reply-alist))))
-                   (setf values-list (append values-list (append values-array nil)))
+                   (setf values-list (append values-list (append values-array
+                                                                 nil)))
                    (setf start-at (+ start-at num-entries))
                    (message "jiralib agile retrieve: got %d values%s%s"
                             start-at
                             (if total " of " "")
                             (if total (int-to-string total) ""))
-                   (if (jiralib--agile-not-last-entry num-entries total start-at limit)
-		       (jiralib--agile-rest-call-it url max-results start-at limit query-params)
-                     ;; last page: call originall callback
+                   (if (jiralib--agile-not-last-entry num-entries total start-at
+                                                      limit)
+                       (jiralib--agile-rest-call-it url max-results start-at
+                                                    limit
+                                                    query-params)
+                                                    ;; last page: call originall callback
                      (message "jiralib agile retrieve: calling callback")
                      (setf jiralib-complete-callback complete-callback)
                      (funcall jiralib-complete-callback
                               :data  (list (cons vk  values-list)))
                      (message "jiralib agile retrieve: all done")))
-               ('error (message (format "jiralib agile retrieve: caught error: %s" err)))))))
+               (error
+                (message (format
+                          "jiralib agile retrieve: caught error: %s" err)))))))
     (jiralib--agile-rest-call-it api max-results start-at limit query-params)))
 
 (provide 'jiralib)
