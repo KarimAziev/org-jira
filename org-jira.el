@@ -1,4 +1,4 @@
-;;; org-jira.el --- Syncing between Jira and Org-mode. -*- lexical-binding: t -*-
+;;; org-jira.el --- Syncing between Jira and Org-mode -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2016-2022 Matthew Carter <m@ahungry.com>
 ;; Copyright (C) 2011 Bao Haojun
@@ -11,7 +11,7 @@
 ;; URL: https://github.com/ahungry/org-jira
 ;; Version: 4.3.3
 ;; Keywords: ahungry jira org bug tracker
-;; Package-Requires: ((emacs "24.5") (cl-lib "0.5") (request "0.2.0") (dash "2.14.1"))
+;; Package-Requires: ((emacs "26.1") (cl-lib "1.0") (request "0.2.0") (dash "2.19.1") (org "9.6.7"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -543,31 +543,31 @@ See `org-default-priority' for more info."
 
 (defvar org-jira-entry-mode-map
   (let ((org-jira-map (make-sparse-keymap)))
-    (define-key org-jira-map (kbd "C-c pg") 'org-jira-get-projects)
-    (define-key org-jira-map (kbd "C-c bg") 'org-jira-get-boards)
-    (define-key org-jira-map (kbd "C-c iv") 'org-jira-get-issues-by-board)
-    (define-key org-jira-map (kbd "C-c ib") 'org-jira-browse-issue)
-    (define-key org-jira-map (kbd "C-c ig") 'org-jira-get-issues)
-    (define-key org-jira-map (kbd "C-c ij") 'org-jira-get-issues-from-custom-jql)
-    (define-key org-jira-map (kbd "C-c ih") 'org-jira-get-issues-headonly)
+    (define-key org-jira-map (kbd "C-c pg") #'org-jira-get-projects)
+    (define-key org-jira-map (kbd "C-c bg") #'org-jira-get-boards)
+    (define-key org-jira-map (kbd "C-c iv") #'org-jira-get-issues-by-board)
+    (define-key org-jira-map (kbd "C-c ib") #'org-jira-browse-issue)
+    (define-key org-jira-map (kbd "C-c ig") #'org-jira-get-issues)
+    (define-key org-jira-map (kbd "C-c ij") #'org-jira-get-issues-from-custom-jql)
+    (define-key org-jira-map (kbd "C-c ih") #'org-jira-get-issues-headonly)
     ;;(define-key org-jira-map (kbd "C-c if") 'org-jira-get-issues-from-filter-headonly)
     ;;(define-key org-jira-map (kbd "C-c iF") 'org-jira-get-issues-from-filter)
-    (define-key org-jira-map (kbd "C-c iu") 'org-jira-update-issue)
-    (define-key org-jira-map (kbd "C-c iw") 'org-jira-progress-issue)
-    (define-key org-jira-map (kbd "C-c in") 'org-jira-progress-issue-next)
-    (define-key org-jira-map (kbd "C-c ia") 'org-jira-assign-issue)
+    (define-key org-jira-map (kbd "C-c iu") #'org-jira-update-issue)
+    (define-key org-jira-map (kbd "C-c iw") #'org-jira-progress-issue)
+    (define-key org-jira-map (kbd "C-c in") #'org-jira-progress-issue-next)
+    (define-key org-jira-map (kbd "C-c ia") #'org-jira-assign-issue)
     ;(define-key org-jira-map (kbd "C-c isr") 'org-jira-set-issue-reporter)
-    (define-key org-jira-map (kbd "C-c ir") 'org-jira-refresh-issue)
-    (define-key org-jira-map (kbd "C-c iR") 'org-jira-refresh-issues-in-buffer)
-    (define-key org-jira-map (kbd "C-c ic") 'org-jira-create-issue)
-    (define-key org-jira-map (kbd "C-c ik") 'org-jira-copy-current-issue-key)
-    (define-key org-jira-map (kbd "C-c sc") 'org-jira-create-subtask)
-    (define-key org-jira-map (kbd "C-c sg") 'org-jira-get-subtasks)
-    (define-key org-jira-map (kbd "C-c cc") 'org-jira-add-comment)
-    (define-key org-jira-map (kbd "C-c cu") 'org-jira-update-comment)
-    (define-key org-jira-map (kbd "C-c wu") 'org-jira-update-worklogs-from-org-clocks)
-    (define-key org-jira-map (kbd "C-c tj") 'org-jira-todo-to-jira)
-    (define-key org-jira-map (kbd "C-c if") 'org-jira-get-issues-by-fixversion)
+    (define-key org-jira-map (kbd "C-c ir") #'org-jira-refresh-issue)
+    (define-key org-jira-map (kbd "C-c iR") #'org-jira-refresh-issues-in-buffer)
+    (define-key org-jira-map (kbd "C-c ic") #'org-jira-create-issue)
+    (define-key org-jira-map (kbd "C-c ik") #'org-jira-copy-current-issue-key)
+    (define-key org-jira-map (kbd "C-c sc") #'org-jira-create-subtask)
+    (define-key org-jira-map (kbd "C-c sg") #'org-jira-get-subtasks)
+    (define-key org-jira-map (kbd "C-c cc") #'org-jira-add-comment)
+    (define-key org-jira-map (kbd "C-c cu") #'org-jira-update-comment)
+    (define-key org-jira-map (kbd "C-c wu") #'org-jira-update-worklogs-from-org-clocks)
+    (define-key org-jira-map (kbd "C-c tj") #'org-jira-todo-to-jira)
+    (define-key org-jira-map (kbd "C-c if") #'org-jira-get-issues-by-fixversion)
     org-jira-map))
 
 ;;;###autoload
@@ -663,6 +663,7 @@ to change the property names this sets."
                       property)))
     (org-entry-put pom property (org-jira-decode value))))
 
+;;;###autoload
 (defun org-jira-kill-line ()
   "Kill the line, without `kill-line' side-effects of altering kill ring."
   (interactive)
@@ -772,7 +773,7 @@ Example: \"2012-01-09T08:59:15.000Z\" becomes \"2012-01-09
       (format-time-string
        "%Y-%m-%d %T"
        (apply
-        'encode-time
+        #'encode-time
         (parse-time-string (replace-regexp-in-string "T\\|\\.000" " " jira-time-str))))
     (error jira-time-str)))
 
@@ -789,7 +790,7 @@ Example: \"2012-01-09T08:59:15.000Z\" becomes \"2012-01-09
   (condition-case ()
       (format-time-string
        "%Y-%m-%dT%T.000Z"
-       (apply 'encode-time
+       (apply #'encode-time
               (org-jira--fix-encode-time-args (parse-time-string org-time-str)))
        t)
     (error org-time-str)))
@@ -843,6 +844,7 @@ This format is typically generated from org-jira-worklogs-to-org-clocks call."
   (when (caddr clock-entry) (insert (replace-regexp-in-string "^\\*" "-" (format "  %s\n" (org-jira-decode (caddr clock-entry)))))) ;; No comment is nil, so don't print it
   )
 
+;;;###autoload
 (defun org-jira-logbook-reset (issue-id filename &optional clocks)
   "Find logbook for ISSUE-ID in FILENAME, delete it.
 Re-create it with CLOCKS.  This is used for worklogs."
@@ -1245,7 +1247,7 @@ ISSUES is a list of `org-jira-sdk-issue' records."
   (org-jira-log (format "About to render %d issues." (length Issues)))
 
   ;; If we have any left, we map over them.
-  (mapc 'org-jira--render-issue Issues)
+  (mapc #'org-jira--render-issue Issues)
 
   ;; Prior text: "Oh, are you the culprit?" - Not sure if this caused an issue at some point.
   ;; We want to ensure we fix broken org narrowing though, by doing org-show-all and then org-cycle.
@@ -1284,6 +1286,7 @@ ISSUES is a list of `org-jira-sdk-issue' records."
             (jiralib-edit-comment issue-id comment-id comment callback-edit)
           (jiralib-add-comment issue-id comment callback-add))))))
 
+;;;###autoload
 (defun org-jira-add-comment (issue-id filename comment)
   "For ISSUE-ID in FILENAME, add a new COMMENT string to the issue region."
   (interactive
@@ -1331,7 +1334,7 @@ Expects input in format such as:
       (when (> (string-to-number worklog-id) 0) ;; pop off the car id line if we found it valid
         (setq lines (cdr lines))))
     (setq lines (reverse (cdr (reverse lines)))) ;; drop last line
-    (let ((comment (org-trim (mapconcat 'identity lines "\n")))
+    (let ((comment (org-trim (mapconcat #'identity lines "\n")))
           (worklog-time (org-jira-worklog-time-from-org-time org-time)))
       `((worklog-id . ,worklog-id)
         (comment . ,comment)
@@ -1412,6 +1415,7 @@ Expects input in format such as:
       (org-jira-update-worklogs-for-issue issue-id filename)
       )))
 
+;;;###autoload
 (defun org-jira-update-worklog ()
   "Update a worklog for the current issue."
   (interactive)
@@ -1691,8 +1695,8 @@ purpose of wiping an old subtree."
                (jira-users (org-jira-get-reporter-candidates project)) ;; TODO, probably a better option than org-jira-get-assignable-users here
                (user (completing-read
                       "Reporter: "
-                      (append (mapcar 'car jira-users)
-                              (mapcar 'cdr jira-users))))
+                      (append (mapcar #'car jira-users)
+                              (mapcar #'cdr jira-users))))
                (reporter (or
                           (cdr (assoc user jira-users))
                           (cdr (rassoc user jira-users)))))
@@ -1712,8 +1716,8 @@ purpose of wiping an old subtree."
                (jira-users (org-jira-get-assignable-users project))
                (user (completing-read
                       "Assignee: "
-                      (append (mapcar 'car jira-users)
-                              (mapcar 'cdr jira-users))))
+                      (append (mapcar #'car jira-users)
+                              (mapcar #'cdr jira-users))))
                (assignee (or
                           (cdr (assoc user jira-users))
                           (cdr (rassoc user jira-users)))))
@@ -1797,7 +1801,7 @@ purpose of wiping an old subtree."
   "Read the components options for PROJECT such as EX."
   (completing-read
    "Components (choose Done to stop): "
-   (append '("Done") (mapcar 'cdr (jiralib-get-components project)))
+   (append '("Done") (mapcar #'cdr (jiralib-get-components project)))
    nil
    t
    nil
@@ -1821,7 +1825,7 @@ that should be bound to an issue."
   "Read priority name."
   (completing-read
    "Priority: "
-   (mapcar 'cdr (jiralib-get-priorities))
+   (mapcar #'cdr (jiralib-get-priorities))
    nil
    t
    nil
@@ -1831,7 +1835,7 @@ that should be bound to an issue."
 (defun org-jira-read-issue-type (&optional project)
   "Read issue type name.  PROJECT is the optional project key."
   (let* ((issue-types
-          (mapcar 'cdr (if project
+          (mapcar #'cdr (if project
                            (jiralib-get-issue-types-by-project project)
                          (jiralib-get-issue-types))))
          (initial-input (when (member (car org-jira-type-read-history) issue-types)
@@ -1853,7 +1857,7 @@ that should be bound to an issue."
   "Read issue type name."
   (completing-read
    "Type: "
-   (mapcar 'cdr (jiralib-get-subtask-types))
+   (mapcar #'cdr (jiralib-get-subtask-types))
    nil
    t
    nil
@@ -1870,7 +1874,7 @@ that should be bound to an issue."
   (let*
       ( ;; (project-components (jiralib-get-components project))
        (jira-users (org-jira-get-assignable-users project))
-       (user (completing-read "Assignee: " (mapcar 'car jira-users)))
+       (user (completing-read "Assignee: " (mapcar #'car jira-users)))
        (priority (car (rassoc (org-jira-read-priority) (jiralib-get-priorities))))
        (ticket-struct
         `((fields
@@ -1983,20 +1987,20 @@ that should be bound to an issue."
   "Read issue workflow progress ACTIONS."
   (let ((action (completing-read
                  "Action: "
-                 (mapcar 'cdr actions)
+                 (mapcar #'cdr actions)
                  nil
                  t
                  nil)))
     (or
      (car (rassoc action actions))
-     (user-error "You specified an empty action, the valid actions are: %s" (mapcar 'cdr actions)))))
+     (user-error "You specified an empty action, the valid actions are: %s" (mapcar #'cdr actions)))))
 
 (defvar org-jira-fields-history nil)
 (defun org-jira-read-field (fields)
   "Read (custom) FIELDS for workflow progress."
   (let ((field-desc (completing-read
                      "More fields to set: "
-                     (cons "Thanks, no more fields are *required*." (mapcar 'org-jira-decode (mapcar 'cdr fields)))
+                     (cons "Thanks, no more fields are *required*." (mapcar #'org-jira-decode (mapcar #'cdr fields)))
                      nil
                      t
                      nil
@@ -2018,7 +2022,7 @@ Used in org-jira-read-resolution and org-jira-progress-issue calls.")
   (if (not jiralib-use-restapi)
       (let ((resolution (completing-read
                          "Resolution: "
-                         (mapcar 'cdr (jiralib-get-resolutions))
+                         (mapcar #'cdr (jiralib-get-resolutions))
                          nil
                          t
                          nil
@@ -2033,6 +2037,7 @@ Used in org-jira-read-resolution and org-jira-progress-issue calls.")
                                      resolutions))))
       (cons 'name resolution-name))))
 
+;;;###autoload
 (defun org-jira-refresh-issues-in-buffer-loose ()
   "Iterates over 1-2 headings in current buffer, refreshing on issue :ID:.
 It differs with org-jira-refresh-issues-in-buffer() in that:
@@ -2060,6 +2065,7 @@ jira ID can be detected in it."
 ;; TODO: Refactor to just scoop all ids from buffer, run ensure-on-issue-id on
 ;; each using a map, and refresh them that way.  That way we don't have to iterate
 ;; on the user headings etc.
+;;;###autoload
 (defun org-jira-refresh-issues-in-buffer ()
   "Iterate across all entries in current buffer, refreshing on issue :ID:.
 Where issue-id will be something such as \"EX-22\"."
@@ -2188,16 +2194,15 @@ Where issue-id will be something such as \"EX-22\"."
            (actions (jiralib-get-available-actions
                      issue-id
                      (org-jira-get-issue-val-from-org 'status)))
-           (action (org-jira-progress-next-action actions (org-jira-get-issue-val-from-org
-                                                           'status)))
+           (action (org-jira-progress-next-action actions (org-jira-get-issue-val-from-org 'status)))
            (fields (jiralib-get-fields-for-action issue-id action))
            (org-jira-rest-fields fields)
            (field-key)
            (custom-fields-collector nil)
            (custom-fields
             (progn
-            ;; delete those elements in fields, which have
-            ;; already been set in custom-fields-collector
+              ;; delete those elements in fields, which have
+              ;; already been set in custom-fields-collector
               (while fields
                 (setq fields
                       (cl-remove-if
@@ -2235,103 +2240,11 @@ Where issue-id will be something such as \"EX-22\"."
            issue-id
            action
            custom-fields
-           #'(lambda
-               (&rest request-response)
-               (let ((_cb-data
-                      (cl-getf request-response :data)))
-                 (let* ((issue-id issue-id)
-                        (filename filename)
-                        (proj-key filename)
-                        (project-file
-                         (org-jira--get-project-file-name proj-key))
-                        (project-buffer
-                         (or
-                          (find-buffer-visiting project-file)
-                          (find-file project-file))))
-                   (save-current-buffer
-                     (set-buffer project-buffer)
-                     (save-excursion
-                       (save-restriction
-                         (widen)
-                         (let* ((--regions
-                                 (org-fold-core-get-regions :with-markers t)))
-                           (unwind-protect
-                               (progn
-                                 (outline-show-all)
-                                 (let ((p
-                                        (org-find-entry-with-id issue-id)))
-                                   (if p nil
-                                     (error "Issue %s not found!" issue-id))
-                                   (goto-char p)
-                                   (org-narrow-to-subtree)
-                                   (org-jira-refresh-issue)))
-                             (save-excursion
-                               (save-restriction
-                                 (widen)
-                                 (if t
-                                     (progn
-                                       (org-fold-core-region
-                                        (point-min)
-                                        (point-max)
-                                        nil)))
-                                 (let ((tail
-                                        (delq nil --regions)))
-                                   (while tail
-                                     (let ((x1362
-                                            (car tail)))
-                                       (progn
-                                         (ignore
-                                          (consp x1362))
-                                         (let* ((x1363
-                                                 (car-safe x1362))
-                                                (x1364
-                                                 (cdr-safe x1362)))
-                                           (progn
-                                             (ignore
-                                              (consp x1364))
-                                             (let* ((x1365
-                                                     (car-safe x1364))
-                                                    (x1366
-                                                     (cdr-safe x1364)))
-                                               (progn
-                                                 (ignore
-                                                  (consp x1366))
-                                                 (let* ((x1367
-                                                         (car-safe x1366))
-                                                        (x1368
-                                                         (cdr-safe x1366)))
-                                                   (progn
-                                                     (ignore
-                                                      (null x1368))
-                                                     (let ((beg x1363)
-                                                           (end x1365)
-                                                           (spec x1367))
-                                                       (progn
-                                                         (let ((rel nil))
-                                                           (if rel
-                                                               (org-fold-core-region
-                                                                (+ rel beg)
-                                                                (+ rel end)
-                                                                t spec)
-                                                             (org-fold-core-region
-                                                              beg end
-                                                              t
-                                                              spec)))
-                                                         (if t
-                                                             (progn
-                                                               (if
-                                                                   (markerp beg)
-                                                                   (progn
-                                                                     (set-marker
-                                                                      beg nil)))
-                                                               (if
-                                                                   (markerp end)
-                                                                   (progn
-                                                                     (set-marker
-                                                                      end nil))))))))))))))
-                                       (setq tail
-                                             (cdr tail))))))))))))))))
+           (org-jira-with-callback
+             (ensure-on-issue-id-with-filename issue-id filename
+               (org-jira-refresh-issue))))
         (error "No action defined for that step!")))))
+
 
 (defun org-jira-get-id-name-alist (name ids-to-names)
   "Find the id corresponding to NAME in IDS-TO-NAMES.
@@ -2357,7 +2270,7 @@ otherwise it should return:
 
 {\"components\": [{\"id\": \"comp-id\", \"name\": \"item\"}]}"
   (if (not project-components) (vector) ;; Return a blank array for JSON
-    (apply 'list
+    (apply #'list
            (cl-mapcan
             (lambda (item)
               (let ((comp-id (car (rassoc item project-components))))
@@ -2583,7 +2496,7 @@ it is a symbol, it will be converted to string."
 Provide this command in case some users are not able to use
 client side jql (maybe because of JIRA server version?)."
   (interactive
-   (list (completing-read "Filter: " (mapcar 'cdr (jiralib-get-saved-filters)))))
+   (list (completing-read "Filter: " (mapcar #'cdr (jiralib-get-saved-filters)))))
   (org-jira-get-issues (jiralib-get-issues-from-filter (car (rassoc filter (jiralib-get-saved-filters))))))
 
 ;;;###autoload
@@ -2591,7 +2504,7 @@ client side jql (maybe because of JIRA server version?)."
   "Get issues *head only* from saved filter named FILTER.
 See `org-jira-get-issues-from-filter'."
   (interactive
-   (list (completing-read "Filter: " (mapcar 'cdr (jiralib-get-saved-filters)))))
+   (list (completing-read "Filter: " (mapcar #'cdr (jiralib-get-saved-filters)))))
   (org-jira-get-issues-headonly (jiralib-get-issues-from-filter (car (rassoc filter (jiralib-get-saved-filters))))))
 
 (org-link-set-parameters "jira" 'org-jira-open)
@@ -2660,7 +2573,7 @@ id - integer board id"
   "Add the boards from list into the org file.
 
 boards -  list of `org-jira-sdk-board' records."
-  (mapc 'org-jira--render-board  boards))
+  (mapc #'org-jira--render-board  boards))
 
 
 (defun org-jira--render-board (board)
@@ -2731,7 +2644,7 @@ boards -  list of `org-jira-sdk-board' records."
         (if pos
             (progn
               (goto-char pos)
-              (apply 'org-jira-sdk-board
+              (apply #'org-jira-sdk-board
                      (cl-reduce
                       #'(lambda (acc entry)
                           (let* ((pname   (car entry))

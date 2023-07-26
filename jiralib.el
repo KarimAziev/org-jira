@@ -1,4 +1,4 @@
-;;; jiralib.el -- Provide connectivity to JIRA SOAP/REST services.
+;;; jiralib.el -- Provide connectivity to JIRA SOAP/REST services. -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2016-2022 Matthew Carter <m@ahungry.com>
 ;; Copyright (C) 2011 Bao Haojun
@@ -526,8 +526,7 @@ request.el, so if at all possible, it should be avoided."
        (when (fboundp 'org-jira-find-value)
          (org-jira-find-value
           (car
-           (let ((issue (car params))
-                 (action (cadr
+           (let ((action (cadr
                           params)))
              (seq-filter
               (lambda
@@ -656,12 +655,12 @@ car is normally used."
     (setq method (symbol-name method)))
   (unless jiralib-token
     (call-interactively 'jiralib-login))
-  (condition-case data
+  (condition-case nil
       (apply 'soap-invoke jiralib-wsdl "jirasoapservice-v2"
              method jiralib-token params)
     (soap-error
-     ;; If we are here, we had a token, but it expired.  Re-login and try
-     ;; again.
+    ;; If we are here, we had a token, but it expired.  Re-login and try
+    ;; again.
      (setq jiralib-token nil)
      (call-interactively 'jiralib-login)
      (apply 'soap-invoke jiralib-wsdl "jirasoapservice-v2"
@@ -1246,7 +1245,7 @@ Server information includes baseUrl, version, edition, buildDate, buildNumber."
     (setq jiralib-users-cache
           (jiralib-call "getUsers" nil project-key))
     (when (boundp 'org-jira-users)
-      (cl-loop for (name . id) in org-jira-users do
+      (cl-loop for (_name . id) in org-jira-users do
                (setf jiralib-users-cache (append (list (jiralib-get-user id))
                                                  jiralib-users-cache)))))
   jiralib-users-cache)
@@ -1260,9 +1259,9 @@ Server information includes baseUrl, version, edition, buildDate, buildNumber."
   (when string (replace-regexp-in-string "\r" "" string)))
 
 (defun jiralib-worklog-import--filter-apply (worklog-obj &optional
-                                                         predicate-fn-lst
-                                                         unwrap-worklog-records-fn
-                                                         rewrap-worklog-records-fn)
+                                                         _predicate-fn-lst
+                                                         _unwrap-worklog-records-fn
+                                                         _rewrap-worklog-records-fn)
   "Remove non-matching org-jira issue worklogs.
 
 Variables:
@@ -1302,9 +1301,9 @@ The variable jiralib-user-login-name is used by many lambda filters."
                 rewrap-worklog-records-fn
               (lambda (x) (remove 'nil (cl-coerce x 'vector)))))
       (setq predicate-fn-lst
-            (if (and (boundp 'predicate-fn-lst)
-                     (not (null predicate-fn-lst))
-                     (listp predicate-fn-lst))
+            (if (and
+                 (not (null predicate-fn-lst))
+                 (listp predicate-fn-lst))
                 predicate-fn-lst
               (mapcar 'caddr
                       (remove 'nil
@@ -1324,7 +1323,7 @@ The variable jiralib-user-login-name is used by many lambda filters."
         (funcall rewrap-worklog-records-fn worklogs))))))
 
 
-(defun jiralib-get-board (id &optional callback)
+(defun jiralib-get-board (id &optional _callback)
   "Return details on given board"
   (jiralib-call "getBoard" nil id))
 
