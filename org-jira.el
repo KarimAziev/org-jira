@@ -141,7 +141,7 @@
 (require 'dash)
 (require 'jiralib)
 (require 'org-jira-sdk)
-
+(require 'transient)
 
 
 (defconst org-jira-version "4.3.1"
@@ -3685,6 +3685,17 @@ Returns the selected issue."
   "Read issues from JIRA and add or update worklog for each issue."
   (interactive)
   (org-jira-mini-read-issues #'org-jira-mini-add-or-update-worklog))
+
+(defun org-jira-mini-on-issue-p ()
+  "Return non-nil if the point is on a JIRA issue."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (unless (looking-at "^\\*\\* ")
+        (search-backward-regexp "^\\*\\* " nil t))
+      (let ((org-jira-id (org-jira-id)))
+        (and org-jira-id (string-match (jiralib-get-issue-regexp)
+                                       (downcase org-jira-id)))))))
 
 ;;;###autoload (autoload 'org-jira-menu "org-jira.el" nil t)
 (transient-define-prefix org-jira-menu ()
