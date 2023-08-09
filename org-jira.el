@@ -129,7 +129,7 @@
 
 ;;; Code:
 
-
+(eval-when-compile (require 'cl))
 (require 'cl-lib)
 (require 'cl-extra)
 
@@ -1360,8 +1360,6 @@ Argument ISSUE is the issue for which the project buffer needs to be retrieved."
 
 (defun org-jira--render-issue (Issue)
   "Render single ISSUE."
-  ;;  (org-jira-log "Rendering issue from issue list")
-  ;;  (org-jira-log (org-jira-sdk-dump Issue))
   (with-slots (filename proj-key issue-id summary status priority headline id)
       Issue
     (let (p)
@@ -1394,7 +1392,8 @@ Argument ISSUE is the issue for which the project buffer needs to be retrieved."
               (org-back-to-heading t)
               (org-set-tags (replace-regexp-in-string "-" "_" issue-id)))
             (org-jira-entry-put (point) "assignee" (or (slot-value Issue
-                                                                   'assignee) "Unassigned"))
+                                                                   'assignee)
+                                                       "Unassigned"))
             (mapc (lambda (entry)
                     (let ((val (slot-value Issue entry)))
                       (when (and val (not (string= val "")))
@@ -1413,49 +1412,55 @@ Argument ISSUE is the issue for which the project buffer needs to be retrieved."
             (mapc
              (lambda (heading-entry)
                (org-jira-ensure-on-issue-id-with-filename issue-id filename
-                                                 (let*
-                                                     ((entry-heading
-                                                       (concat (symbol-name
-                                                                heading-entry)
-                                                               (format
-                                                                ": [[%s][%s]]"
-                                                                (concat
-                                                                 jiralib-url
-                                                                 "/browse/"
-                                                                 issue-id)
-                                                                issue-id))))
-                                                   (setq p (org-find-exact-headline-in-buffer entry-heading))
-                                                   (if (and p (>= p (point-min))
-                                                            (<= p (point-max)))
-                                                       (progn
-                                                         (goto-char p)
-                                                         (org-narrow-to-subtree)
-                                                         (goto-char (point-min))
-                                                         (forward-line 1)
-                                                         (delete-region (point)
-                                                                        (point-max)))
-                                                     (if (org-goto-first-child)
-                                                         (org-insert-heading)
-                                                       (goto-char (point-max))
-                                                       (org-insert-subheading t))
-                                                     (org-jira-insert
-                                                      entry-heading "\n"))
-
-;;  Insert 2 spaces of indentation so Jira markup won't cause org-markup
-                                                   (org-jira-insert
-                                                    (replace-regexp-in-string
-                                                     "^" "  "
-                                                     (format "%s" (slot-value
-                                                                   Issue heading-entry)))))))
+                                                          (let* ((entry-heading
+                                                                  (concat
+                                                                   (symbol-name
+                                                                    heading-entry)
+                                                                   (format
+                                                                    ": [[%s][%s]]"
+                                                                    (concat
+                                                                     jiralib-url
+                                                                     "/browse/"
+                                                                     issue-id)
+                                                                    issue-id))))
+                                                            (setq p (org-find-exact-headline-in-buffer entry-heading))
+                                                            (if
+                                                                (and p
+                                                                     (>= p
+                                                                         (point-min))
+                                                                     (<= p
+                                                                         (point-max)))
+                                                                (progn
+                                                                  (goto-char p)
+                                                                  (org-narrow-to-subtree)
+                                                                  (goto-char
+                                                                   (point-min))
+                                                                  (forward-line
+                                                                   1)
+                                                                  (delete-region
+                                                                   (point)
+                                                                   (point-max)))
+                                                              (if
+                                                                  (org-goto-first-child)
+                                                                  (org-insert-heading)
+                                                                (goto-char
+                                                                 (point-max))
+                                                                (org-insert-subheading
+                                                                 t))
+                                                              (org-jira-insert
+                                                               entry-heading
+                                                               "\n"))
+                                                            (org-jira-insert
+                                                             (replace-regexp-in-string
+                                                              "^" "  "
+                                                              (format "%s"
+                                                                      (slot-value
+                                                                       Issue
+                                                                       heading-entry)))))))
              '(description))
             (when org-jira-download-comments
-              (org-jira-update-comments-for-issue Issue)
-
-;; FIXME: Re-enable when attachments are not erroring.
-;;(org-jira-update-attachments-for-current-issue)
-              )
-
-;; only sync worklog clocks when the user sets it to be so.
+              (org-jira-update-comments-for-issue Issue))
+            (org-jira-update-attachments-for-current-issue)
             (when org-jira-worklog-sync-p
               (org-jira-update-worklogs-for-issue issue-id filename))))))))
 
@@ -1490,8 +1495,8 @@ ISSUES is a list of variable `org-jira-sdk-issue' records."
          (comment-id (org-jira-get-from-org 'comment 'id))
          (comment (replace-regexp-in-string "^  " "" (org-jira-get-comment-body
                                                       comment-id))))
-    (let ((issue-id issue-id)
-          (filename filename))
+    (lexical-let ((issue-id issue-id)
+                  (filename filename))
       (let ((callback-edit
              (cl-function
               (lambda (&key _data &allow-other-keys)
@@ -1520,16 +1525,17 @@ ISSUES is a list of variable `org-jira-sdk-issue' records."
           (filename (org-jira-filename))
           (comment (read-string (format  "Comment (%s): " issue-id))))
      (list issue-id filename comment)))
-  (let ((issue-id issue-id)
-        (filename filename))
+  (lexical-let ((issue-id issue-id)
+                (filename filename))
     (org-jira-ensure-on-issue-id-with-filename issue-id filename
-                                      (goto-char (point-max))
-                                      (jiralib-add-comment
-                                       issue-id comment
-                                       (cl-function
-                                        (lambda (&key _data &allow-other-keys)
-                                          (org-jira-ensure-on-issue-id-with-filename issue-id filename
-                                                                            (org-jira-update-comments-for-current-issue))))))))
+                                               (goto-char (point-max))
+                                               (jiralib-add-comment
+                                                issue-id comment
+                                                (cl-function
+                                                 (lambda (&key _data &allow-other-keys)
+                                                   (org-jira-ensure-on-issue-id-with-filename
+                                                       issue-id filename
+                                                       (org-jira-update-comments-for-current-issue))))))))
 
 (defun org-jira-org-clock-to-date (org-time)
   "Convert ORG-TIME formatted date into a plain date string."
@@ -1810,81 +1816,244 @@ purpose of wiping an old subtree."
 (defun org-jira-update-attachments-for-current-issue ()
   "Update the attachments for the current issue."
   (when jiralib-use-restapi
-    (let ((issue-id (org-jira-get-from-org 'issue 'key)))
+    (lexical-let ((issue-id (org-jira-get-from-org 'issue 'key)))
     ;; Run the call
-                 (jiralib-get-attachments
-                  issue-id
+      (jiralib-get-attachments
+       issue-id
+       (save-excursion
+         (cl-function
+          (lambda (&key data &allow-other-keys)
+          ;; First, make sure we're in the proper buffer (logic copied from org-jira-get-issues.
+            (let* ((proj-key (replace-regexp-in-string "-.*" ""
+                                                       issue-id))
+                   (project-file (org-jira--get-project-file-name
+                                  proj-key))
+                   (project-buffer (or (find-buffer-visiting
+                                        project-file)
+                                       (find-file project-file))))
+              (with-current-buffer project-buffer
+                (ignore-errors
                   (save-excursion
-                    (cl-function
-                     (lambda (&key data &allow-other-keys)
-                     ;; First, make sure we're in the proper buffer (logic copied from org-jira-get-issues.
-                       (let* ((proj-key (replace-regexp-in-string "-.*" ""
-                                                                  issue-id))
-                              (project-file (org-jira--get-project-file-name
-                                             proj-key))
-                              (project-buffer (or (find-buffer-visiting
-                                                   project-file)
-                                                  (find-file project-file))))
-                         (with-current-buffer project-buffer
-                         ;; delete old attachment node
-                           (org-jira-ensure-on-issue
-                             (if (org-goto-first-child)
-                                 (while (org-goto-sibling)
-                                   (forward-thing 'whitespace)
-                                   (when (looking-at "Attachments:")
-                                     (org-jira-delete-subtree)))))
-                           (let
-                               ((attachments
-                                 (org-jira-find-value data 'fields 'attachment)))
-                             (when (not (zerop (length attachments)))
-                               (org-jira-ensure-on-issue
-                                 (if (org-goto-first-child)
-                                     (progn
-                                       (while (org-goto-sibling))
-                                       (org-insert-heading-after-current))
-                                   (org-insert-subheading nil))
-                                 (insert "Attachments:")
-                                 (mapc
-                                  (lambda (attachment)
-                                    (let
-                                        ((attachment-id (org-jira-get-comment-id
-                                                         attachment))
-                                         (author (org-jira-get-comment-author
-                                                  attachment))
-                                         (created
-                                          (org-jira-transform-time-format
-                                           (org-jira-find-value
-                                            attachment
-                                            'created)))
-                                         (size (org-jira-find-value attachment
-                                                                    'size))
-                                         (content
-                                          (org-jira-find-value attachment
-                                                               'content))
-                                         (filename
-                                          (org-jira-find-value
-                                           attachment
-                                           'filename)))
-                                      (if (looking-back "Attachments:" 0)
-                                          (org-insert-subheading nil)
-                                        (org-insert-heading-respect-content))
-                                      (insert "[[" content "][" filename "]]")
-                                      (org-narrow-to-subtree)
-                                      (org-jira-entry-put (point) "ID"
-                                                          attachment-id)
-                                      (org-jira-entry-put (point) "Author"
-                                                          author)
-                                      (org-jira-entry-put (point) "Name"
-                                                          filename)
-                                      (org-jira-entry-put (point) "Created"
-                                                          created)
-                                      (org-jira-entry-put (point) "Size"
-                                                          (ls-lisp-format-file-size
-                                                           size t))
-                                      (org-jira-entry-put (point) "Content"
-                                                          content)
-                                      (widen)))
-                                  attachments)))))))))))))
+                    (org-jira-delete-section "Attachments:")))
+                (let ((attachments
+                       (org-jira-find-value data 'fields 'attachment)))
+                  (when (not (zerop (length attachments)))
+                    (org-jira-ensure-on-issue
+                      (if (org-goto-first-child)
+                          (progn
+                            (while (org-goto-sibling))
+                            (org-insert-heading-after-current))
+                        (org-insert-subheading nil))
+                      (insert "Attachments:")
+                      (mapc
+                       (lambda (attachment)
+                         (let ((attachment-id (org-jira-get-comment-id
+                                               attachment))
+                               (author (org-jira-get-comment-author
+                                        attachment))
+                               (created
+                                (org-jira-transform-time-format
+                                 (org-jira-find-value
+                                  attachment
+                                  'created)))
+                               (size (org-jira-find-value attachment
+                                                          'size))
+                               (content
+                                (org-jira-find-value attachment
+                                                     'content))
+                               (filename
+                                (org-jira-find-value
+                                 attachment
+                                 'filename)))
+                           (if (looking-back "Attachments:" 0)
+                               (org-insert-subheading nil)
+                             (org-insert-heading-respect-content))
+                           (insert "[[" content "][" filename "]]")
+                           (org-narrow-to-subtree)
+                           (org-jira-entry-put (point) "ID"
+                                               attachment-id)
+                           (org-jira-entry-put (point) "Author"
+                                               author)
+                           (org-jira-entry-put (point) "Name"
+                                               filename)
+                           (org-jira-entry-put (point) "Created"
+                                               created)
+                           (org-jira-entry-put (point) "Size"
+                                               (ls-lisp-format-file-size
+                                                size t))
+                           (org-jira-entry-put (point) "Content"
+                                               content)
+                           (widen)))
+                       attachments)
+                      (org-jira-replace-links-in-descriptions)))))))))))))
+
+
+(defun org-jira-get-description-bounds ()
+  "Get the bounds of the description in an `org-jira' issue."
+  (save-excursion
+    (let ((start (org-jira-get-child-start "description:")))
+      (goto-char start)
+      (let ((end (org-end-of-subtree t t)))
+        (cons start (if (eolp)
+                        end
+                      (forward-char -1)
+                      (setq end (point))))))))
+
+
+(defun org-jira-delete-section (section)
+  "Delete a SECTION and its child sections.
+
+Argument SECTION is the section to be deleted."
+  (let ((start))
+    (while (setq start (org-jira-get-child-start section))
+      (goto-char start)
+      (let ((end (org-end-of-subtree t t)))
+        (if (eolp)
+            end
+          (forward-char -1)
+          (setq end (point)))
+        (goto-char start)
+        (delete-region start end)))))
+
+
+
+(defun org-jira-get-child-start (heading)
+  "Find the starting point of a child HEADING in an `org-jira' issue.
+
+Argument HEADING is the heading of the child element to search for."
+  (org-jira-ensure-on-issue
+    (when (org-goto-first-child)
+      (while
+          (when (not (looking-at (concat "[\s]*[\\*]+[\s]" heading)))
+            (org-goto-sibling)))
+      (when (looking-at (concat "[\s]*[\\*]+[\s]" heading))
+        (point)))))
+
+(defun org-jira-get-description ()
+  "Get the bounds of the description in an `org-jira' issue."
+  (pcase-let ((`(,beg . ,end)
+               (org-jira-get-description-bounds)))
+    (when (and beg end)
+      (buffer-substring-no-properties beg end))))
+
+(defun org-jira-fetch-attachment (url &optional file)
+  "Fetches a Jira attachment from a given URL and saves it to a FILE.
+
+Argument FILE is an optional argument that specifies the file where the fetched
+Jira attachment will be saved."
+  (let ((url-request-extra-headers
+         `(,jiralib-token)))
+    (url-retrieve
+     url
+     (lambda (status filename)
+       (let ((err (plist-get status :error)))
+         (when err
+           (error
+            "HTTP error %s"
+            (downcase (nth 2 (assq (nth 2 err) url-http-codes))))))
+       (delete-region
+        (point-min)
+        (progn
+          (re-search-forward "\n\n" nil 'move)
+          (point)))
+       (let ((coding-system-for-write 'no-conversion))
+         (write-region nil nil filename nil nil nil nil)))
+     (list
+      file)
+     nil t)))
+
+(defun org-jira-load-item-attachments (proj-key attachments)
+  "Download and save Jira ATTACHMENTS for a specific project.
+
+Argument ATTACHMENTS is a list of attachments that need to be loaded."
+  (let ((repls)
+        (parent org-jira-working-dir)
+        (dir))
+    (setq dir (expand-file-name
+               (concat "attachments/"
+                       proj-key)
+               parent))
+    (dolist (attachment attachments)
+      (let ((url
+             (cdr attachment))
+            (file
+             (car attachment))
+            (full-file)
+            (relative)
+            (cell))
+        (setq full-file (expand-file-name
+                         file
+                         dir))
+        (setq relative (concat "[[./"
+                               (file-relative-name full-file parent)
+                               "]]"))
+        (when url
+          (unless (file-exists-p dir)
+            (make-directory dir t))
+          (setq cell (cons file relative))
+          (push cell repls)
+          (unless (file-exists-p full-file)
+            (org-jira-fetch-attachment url full-file)))))
+    repls))
+
+
+
+(defun org-jira-get-current-attachments ()
+  "Get the bounds of the description in an `org-jira' issue."
+  (when-let ((beg (org-jira-get-child-start "Attachments:")))
+    (when beg
+      (goto-char beg)
+      (when (org-goto-first-child)
+        (let ((replacements))
+          (while
+              (when-let ((url (org-entry-get (point) "Content"))
+                         (filename (org-entry-get (point) "Name")))
+                (push (cons filename url) replacements)
+                (org-goto-sibling)))
+          replacements)))))
+
+
+
+
+(defun org-jira-replace-links-in-descriptions ()
+  "Replace links in Jira descriptions with their corresponding attachments."
+  (pcase-let* ((proj-key (replace-regexp-in-string "-.*" ""
+                                                   (org-jira-get-from-org
+                                                    'issue 'key)))
+               (replacement-alist
+                (when proj-key
+                  (org-jira-load-item-attachments
+                   proj-key
+                   (org-jira-get-current-attachments))))
+               (`(,beg . ,end)
+                (org-jira-get-description-bounds))
+               (description
+                (when (and beg end replacement-alist)
+                  (buffer-substring-no-properties beg end))))
+    (when description
+      (setq description (if
+                            (and replacement-alist
+                                 description)
+                            (seq-reduce
+                             (lambda (acc repl)
+                               (let ((re
+                                      (concat "[!]"
+                                              (car repl)
+                                              "\\([|]width=\\([0-9]+\\),height=\\([0-9]+\\)[!]\\)?"))
+                                     (rep (cdr repl)))
+                                 (if rep
+                                     (setq acc
+                                           (replace-regexp-in-string
+                                            re
+                                            rep
+                                            acc))
+                                   acc)))
+                             replacement-alist description)
+                          description))
+      (replace-region-contents beg end (lambda () description)))))
+
+
+
 
 (defun org-jira-sort-org-clocks (clocks)
   "Given a CLOCKS list, sort it by start date descending."
@@ -2204,7 +2373,7 @@ issue belongs."
   ;; See: https://github.com/ahungry/org-jira/issues/319
   ;; See: https://github.com/ahungry/org-jira/issues/296
   ;; See: https://github.com/ahungry/org-jira/issues/316
-  (let ((my-key key))
+  (lexical-let ((my-key key))
     (org-jira-ensure-on-issue
       (cond ((eq my-key 'description)
              (org-goto-first-child)
@@ -2767,7 +2936,7 @@ it is a symbol, it will be converted to string."
   "Copy a file from a URL to a new location.
 
 Argument NEWNAME is the name of the file to be saved."
-  (let ((newname newname))
+  (lexical-let ((newname newname))
     (url-retrieve
      url
      (lambda (_status)
