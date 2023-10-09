@@ -129,13 +129,10 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))
-(require 'cl-lib)
-(require 'cl-extra)
 
+(require 'cl-lib)
 (require 'org)
 (require 'org-clock)
-(require 'cl-lib)
 (require 'url)
 (require 'ls-lisp)
 (require 'dash)
@@ -1339,10 +1336,11 @@ Argument ISSUE is the issue for which the project buffer needs to be retrieved."
 (defun org-jira--is-top-headline? (proj-key)
   "For PROJ-KEY, check if it is a top headline or not."
   (let ((elem (org-element-at-point)))
-    (and (eq 'headline (car elem))
-         (equal (format "%s-Tickets" proj-key)
-                (org-element-property :title elem))
-         (= 1 (org-element-property :level elem)))))
+    (when (fboundp 'org-element-property)
+      (and (eq 'headline (car elem))
+           (equal (format "%s-Tickets" proj-key)
+                  (org-element-property :title elem))
+           (= 1 (org-element-property :level elem))))))
 
 (defun org-jira--maybe-render-top-heading (proj-key)
   "Ensure that there is a headline for PROJ-KEY at the top of the file."
@@ -1460,7 +1458,6 @@ Argument ISSUE is the issue for which the project buffer needs to be retrieved."
              '(description))
             (when org-jira-download-comments
               (org-jira-update-comments-for-issue Issue))
-            (org-jira-update-attachments-for-current-issue)
             (when org-jira-worklog-sync-p
               (org-jira-update-worklogs-for-issue issue-id filename))))))))
 
@@ -1468,23 +1465,27 @@ Argument ISSUE is the issue for which the project buffer needs to be retrieved."
   "Add the issues from ISSUES list into the org file(s).
 
 ISSUES is a list of variable `org-jira-sdk-issue' records."
-  ;; FIXME: Some type of loading error - the car async callback does not know about
-  ;; the issues existing as a class, so we may need to instantiate here if we have none.
-  (when (eq 0 (->> Issues (cl-remove-if-not #'org-jira-sdk-isa-issue?) length))
-    (setq Issues (org-jira-sdk-create-issues-from-data-list Issues)))
+;; FIXME: Some type of loading error - the car async callback does not know about
+;; the issues existing as a class, so we may need to instantiate here if we have none.
+  (when (fboundp 'cl-remove-if-not)
+    (when
+        (eq 0 (->> Issues (cl-remove-if-not #'org-jira-sdk-isa-issue?) length))
+      (setq Issues (org-jira-sdk-create-issues-from-data-list Issues)))
 
-  ;; First off, we never ever want to run on non-issues, so check our types early.
-  (setq Issues (cl-remove-if-not #'org-jira-sdk-isa-issue? Issues))
-  (org-jira-log (format "About to render %d issues." (length Issues)))
+;; First off, we never ever want to run on non-issues, so check our types early.
+    (setq Issues (cl-remove-if-not #'org-jira-sdk-isa-issue? Issues))
+    (org-jira-log (format "About to render %d issues." (length Issues)))
 
-  ;; If we have any left, we map over them.
-  (mapc #'org-jira--render-issue Issues)
+;; If we have any left, we map over them.
+    (mapc #'org-jira--render-issue Issues)
 
-  ;; Prior text: "Oh, are you the culprit?" - Not sure if this caused an issue at some point.
-  ;; We want to ensure we fix broken org narrowing though, by doing org-show-all and then org-cycle.
-  (switch-to-buffer (org-jira--get-project-buffer (-last-item Issues)))
-  (org-fold-show-all)
-  (org-cycle))
+;; Prior text: "Oh, are you the culprit?" - Not sure if this caused an issue at some point.
+;; We want to ensure we fix broken org narrowing though, by doing org-show-all and then org-cycle.
+    (with-current-buffer (org-jira--get-project-buffer (-last-item Issues))
+      (save-buffer))
+    (switch-to-buffer (org-jira--get-project-buffer (-last-item Issues)))
+    (org-fold-show-all)
+    (org-cycle)))
 
 ;;;###autoload
 (defun org-jira-update-comment ()
@@ -1495,8 +1496,8 @@ ISSUES is a list of variable `org-jira-sdk-issue' records."
          (comment-id (org-jira-get-from-org 'comment 'id))
          (comment (replace-regexp-in-string "^  " "" (org-jira-get-comment-body
                                                       comment-id))))
-    (lexical-let ((issue-id issue-id)
-                  (filename filename))
+    (let ((issue-id issue-id)
+          (filename filename))
       (let ((callback-edit
              (cl-function
               (lambda (&key _data &allow-other-keys)
@@ -1525,14 +1526,15 @@ ISSUES is a list of variable `org-jira-sdk-issue' records."
           (filename (org-jira-filename))
           (comment (read-string (format  "Comment (%s): " issue-id))))
      (list issue-id filename comment)))
-  (lexical-let ((issue-id issue-id)
-                (filename filename))
+  (let ((issue-id issue-id)
+        (filename filename))
     (org-jira-ensure-on-issue-id-with-filename issue-id filename
                                                (goto-char (point-max))
                                                (jiralib-add-comment
                                                 issue-id comment
                                                 (cl-function
-                                                 (lambda (&key _data &allow-other-keys)
+                                                 (lambda (&key _data
+                                                               &allow-other-keys)
                                                    (org-jira-ensure-on-issue-id-with-filename
                                                        issue-id filename
                                                        (org-jira-update-comments-for-current-issue))))))))
@@ -1722,10 +1724,11 @@ Argument COMMENTS is a list of comments."
   "Extract comments from DATA.
 
 Argument DATA is a list of data that contains comments."
-  (->> (append data nil)
-       org-jira-sdk-create-comments-from-data-list
-       org-jira-maybe-reverse-comments
-       (cl-remove-if #'org-jira-isa-ignored-comment?)))
+  (when (fboundp 'cl-remove-if)
+    (->> (append data nil)
+         org-jira-sdk-create-comments-from-data-list
+         org-jira-maybe-reverse-comments
+         (cl-remove-if #'org-jira-isa-ignored-comment?))))
 
 (defun org-jira--render-comment (Issue Comment)
   "Render a COMMENT for ISSUE.
@@ -1816,7 +1819,7 @@ purpose of wiping an old subtree."
 (defun org-jira-update-attachments-for-current-issue ()
   "Update the attachments for the current issue."
   (when jiralib-use-restapi
-    (lexical-let ((issue-id (org-jira-get-from-org 'issue 'key)))
+    (let ((issue-id (org-jira-get-from-org 'issue 'key)))
     ;; Run the call
       (jiralib-get-attachments
        issue-id
@@ -2373,7 +2376,7 @@ issue belongs."
   ;; See: https://github.com/ahungry/org-jira/issues/319
   ;; See: https://github.com/ahungry/org-jira/issues/296
   ;; See: https://github.com/ahungry/org-jira/issues/316
-  (lexical-let ((my-key key))
+  (let ((my-key key))
     (org-jira-ensure-on-issue
       (cond ((eq my-key 'description)
              (org-goto-first-child)
@@ -2389,9 +2392,11 @@ issue belongs."
             ((eq my-key 'deadline)
              (let ((encoded-time (org-get-deadline-time (point))))
                (when encoded-time
-                 (cl-reduce (lambda (carry segment)
-                              (format "%s-%s" carry segment))
-                            (reverse (cl-subseq (decode-time encoded-time) 3 6))))))
+                 (when (fboundp 'cl-reduce)
+                   (cl-reduce (lambda (carry segment)
+                                (format "%s-%s" carry segment))
+                              (reverse
+                               (cl-subseq (decode-time encoded-time) 3 6)))))))
 
 ;; default case, just grab the value in the properties block
             (t
@@ -2567,37 +2572,39 @@ Where issue-id will be something such as \"EX-22\"."
             (progn
             ;; delete those elements in fields, which have
             ;; already been set in custom-fields-collector
-              (while fields
-                (setq fields
-                      (cl-remove-if
-                       (lambda (strstr)
-                         (cl-member-if (lambda (symstr)
-                                         (string= (car strstr)  (symbol-name (car symstr))))
-                                       custom-fields-collector))
-                       fields))
-                (setq field-key (org-jira-read-field fields))
-                (if (not field-key)
-                    (setq fields nil)
-                  (setq custom-fields-collector
-                        (cons
-                         (funcall (if jiralib-use-restapi
-                                      #'list
-                                    #'cons)
-                                  field-key
-                                  (if (eq field-key 'resolution)
-                                      (org-jira-read-resolution)
-                                    (let ((field-value (completing-read
-                                                        (format "Please enter %s's value: "
-                                                                (cdr (assoc (symbol-name field-key) fields)))
-                                                        org-jira-fields-values-history
-                                                        nil
-                                                        nil
-                                                        nil
-                                                        'org-jira-fields-values-history)))
-                                      (if jiralib-use-restapi
-                                          (cons 'name field-value)
-                                        field-value))))
-                         custom-fields-collector))))
+              (when (and (fboundp 'cl-remove-if)
+                         (fboundp 'cl-member-if))
+                (while fields
+                  (setq fields
+                        (cl-remove-if
+                         (lambda (strstr)
+                           (cl-member-if (lambda (symstr)
+                                           (string= (car strstr)  (symbol-name (car symstr))))
+                                         custom-fields-collector))
+                         fields))
+                  (setq field-key (org-jira-read-field fields))
+                  (if (not field-key)
+                      (setq fields nil)
+                    (setq custom-fields-collector
+                          (cons
+                           (funcall (if jiralib-use-restapi
+                                        #'list
+                                      #'cons)
+                                    field-key
+                                    (if (eq field-key 'resolution)
+                                        (org-jira-read-resolution)
+                                      (let ((field-value (completing-read
+                                                          (format "Please enter %s's value: "
+                                                                  (cdr (assoc (symbol-name field-key) fields)))
+                                                          org-jira-fields-values-history
+                                                          nil
+                                                          nil
+                                                          nil
+                                                          'org-jira-fields-values-history)))
+                                        (if jiralib-use-restapi
+                                            (cons 'name field-value)
+                                          field-value))))
+                           custom-fields-collector)))))
               custom-fields-collector)))
       (jiralib-progress-workflow-action
        issue-id
@@ -2609,13 +2616,14 @@ Where issue-id will be something such as \"EX-22\"."
 
 (defun org-jira-progress-next-action (actions current-status)
   "Grab the user defined `next' action from ACTIONS, given CURRENT-STATUS."
-  (let* ((next-action-name (cdr (assoc current-status
-                                       org-jira-progress-issue-flow)))
-         (next-action-id (caar (cl-remove-if-not
-                                (lambda (action)
-                                  (equal action next-action-name))
-                                actions :key #'cdr))))
-    next-action-id))
+  (when (fboundp 'cl-remove-if-not)
+    (let* ((next-action-name (cdr (assoc current-status
+                                         org-jira-progress-issue-flow)))
+           (next-action-id (caar (cl-remove-if-not
+                                  (lambda (action)
+                                    (equal action next-action-name))
+                                  actions :key #'cdr))))
+      next-action-id)))
 
 ;;;###autoload
 (defun org-jira-progress-issue-next ()
@@ -2627,46 +2635,49 @@ Where issue-id will be something such as \"EX-22\"."
            (actions (jiralib-get-available-actions
                      issue-id
                      (org-jira-get-issue-val-from-org 'status)))
-           (action (org-jira-progress-next-action actions (org-jira-get-issue-val-from-org 'status)))
+           (action (org-jira-progress-next-action actions (org-jira-get-issue-val-from-org
+                                                           'status)))
            (fields (jiralib-get-fields-for-action issue-id action))
            (org-jira-rest-fields fields)
            (field-key)
            (custom-fields-collector nil)
            (custom-fields
             (progn
-              ;; delete those elements in fields, which have
-              ;; already been set in custom-fields-collector
-              (while fields
-                (setq fields
-                      (cl-remove-if
-                       (lambda (strstr)
-                         (cl-member-if (lambda (symstr)
-                                         (string= (car strstr)  (symbol-name (car symstr))))
-                                       custom-fields-collector))
-                       fields))
-                (setq field-key (org-jira-read-field fields))
-                (if (not field-key)
-                    (setq fields nil)
-                  (setq custom-fields-collector
-                        (cons
-                         (funcall (if jiralib-use-restapi
-                                      #'list
-                                    #'cons)
-                                  field-key
-                                  (if (eq field-key 'resolution)
-                                      (org-jira-read-resolution)
-                                    (let ((field-value (completing-read
-                                                        (format "Please enter %s's value: "
-                                                                (cdr (assoc (symbol-name field-key) fields)))
-                                                        org-jira-fields-values-history
-                                                        nil
-                                                        nil
-                                                        nil
-                                                        'org-jira-fields-values-history)))
-                                      (if jiralib-use-restapi
-                                          (cons 'name field-value)
-                                        field-value))))
-                         custom-fields-collector))))
+            ;; delete those elements in fields, which have
+            ;; already been set in custom-fields-collector
+              (when (and (fboundp 'cl-remove-if)
+                         (fboundp 'cl-member-if))
+                (while fields
+                  (setq fields
+                        (cl-remove-if
+                         (lambda (strstr)
+                           (cl-member-if (lambda (symstr)
+                                           (string= (car strstr)  (symbol-name (car symstr))))
+                                         custom-fields-collector))
+                         fields))
+                  (setq field-key (org-jira-read-field fields))
+                  (if (not field-key)
+                      (setq fields nil)
+                    (setq custom-fields-collector
+                          (cons
+                           (funcall (if jiralib-use-restapi
+                                        #'list
+                                      #'cons)
+                                    field-key
+                                    (if (eq field-key 'resolution)
+                                        (org-jira-read-resolution)
+                                      (let ((field-value (completing-read
+                                                          (format "Please enter %s's value: "
+                                                                  (cdr (assoc (symbol-name field-key) fields)))
+                                                          org-jira-fields-values-history
+                                                          nil
+                                                          nil
+                                                          nil
+                                                          'org-jira-fields-values-history)))
+                                        (if jiralib-use-restapi
+                                            (cons 'name field-value)
+                                          field-value))))
+                           custom-fields-collector)))))
               custom-fields-collector)))
       (if action
           (jiralib-progress-workflow-action
@@ -2675,7 +2686,7 @@ Where issue-id will be something such as \"EX-22\"."
            custom-fields
            (org-jira-with-callback
              (org-jira-ensure-on-issue-id-with-filename issue-id filename
-               (org-jira-refresh-issue))))
+                                                        (org-jira-refresh-issue))))
         (error "No action defined for that step!")))))
 
 
@@ -2936,7 +2947,7 @@ it is a symbol, it will be converted to string."
   "Copy a file from a URL to a new location.
 
 Argument NEWNAME is the name of the file to be saved."
-  (lexical-let ((newname newname))
+  (let ((newname newname))
     (url-retrieve
      url
      (lambda (_status)
@@ -3140,29 +3151,30 @@ buffer."
         (if pos
             (progn
               (goto-char pos)
-              (apply #'org-jira-sdk-board
-                     (cl-reduce
-                      #'(lambda (acc entry)
-                          (let* ((pname   (car entry))
-                                 (pval (cdr entry))
-                                 (pair (and pval
-                                            (not (string-empty-p pval))
-                                            (cond ((equal pname "ID")
-                                                   (list :id pval))
-                                                  ((equal pname "URL")
-                                                   (list :url pval))
-                                                  ((equal pname "TYPE")
-                                                   (list :board-type pval))
-                                                  ((equal pname "NAME")
-                                                   (list :name pval))
-                                                  ((equal pname "LIMIT")
-                                                   (list :limit (string-to-number
-                                                                 pval)))
-                                                  ((equal pname "JQL")
-                                                   (list :jql pval))
-                                                  (t nil)))))
-                            (if pair  (append pair acc)  acc)))
-                      (org-entry-properties) :initial-value  ()))))))))
+              (when (fboundp 'cl-reduce)
+                (apply #'org-jira-sdk-board
+                       (cl-reduce
+                        #'(lambda (acc entry)
+                            (let* ((pname   (car entry))
+                                   (pval (cdr entry))
+                                   (pair (and pval
+                                              (not (string-empty-p pval))
+                                              (cond ((equal pname "ID")
+                                                     (list :id pval))
+                                                    ((equal pname "URL")
+                                                     (list :url pval))
+                                                    ((equal pname "TYPE")
+                                                     (list :board-type pval))
+                                                    ((equal pname "NAME")
+                                                     (list :name pval))
+                                                    ((equal pname "LIMIT")
+                                                     (list :limit (string-to-number
+                                                                   pval)))
+                                                    ((equal pname "JQL")
+                                                     (list :jql pval))
+                                                    (t nil)))))
+                              (if pair  (append pair acc)  acc)))
+                        (org-entry-properties) :initial-value  ())))))))))
 
 (defun org-jira-get-org-keyword-from-status (status)
   "Gets an `org-mode' keyword corresponding to a given jira STATUS."
@@ -3267,14 +3279,14 @@ buffer."
          (symbol-name item))
         (nil item)))
 
+(defvar org-jira-mini-alist nil)
 (defun org-jira-mini-get-issue-key (issue)
   "Split ISSUE string and return first element without text props."
   (org-jira-mini-s-strip-props (car (split-string issue nil t))))
 
 (defun org-jira-mini-issue-display-to-real (issue)
   "Return cons which car is ISSUE key and cdr is org element."
-  (assoc (org-jira-mini-get-issue-key (org-jira-mini-s-strip-props issue))
-         org-jira-mini-current-tasks))
+  (cdr (assoc issue org-jira-mini-alist)))
 
 (defun org-jira-mini-issue-display-to-real-action (action)
   "Return function that call ACTION with issue cons.
@@ -3285,11 +3297,11 @@ The car is ISSUE key and cdr is org element."
 (defun org-jira-mini-issue-display-to-issue-key-action (action)
   "Return a lambda function that call an ACTION with one argument."
   (lambda (c)
-    (funcall action (org-jira-mini-get-issue-key c))))
+    (funcall action (car (org-jira-mini-issue-display-to-real c)))))
 
 (defun org-jira-mini-browse-issue (issue-key)
   "Open the JIRA issue with the provided ISSUE-KEY in a web browser."
-  (browse-url (concat jiralib-host "/browse/" issue-key)))
+  (browse-url (concat jiralib-url "/browse/" issue-key)))
 
 (defun org-jira-mini-copy-branch-action (issue)
   "Copy the branch name from the given ISSUE and return it as a string.
@@ -3334,22 +3346,152 @@ If the branch name cannot be created, raise an error with a message."
   (dolist (buff (org-jira-mini-get-projects-buffers))
     (org-jira-mini-save-buffer buff)))
 
+
+
+(defun org-jira-mini-fetch-issue-sync (issue-key)
+  "Invoke the corresponding jira rest method API.
+Invoking COMPLETE-CALLBACK when the
+JIRALIB-COMPLETE-CALLBACK is non-nil, request finishes, and
+passing ARGS to REQUEST."
+  (org-jira-mini-fetch-sync (format "/rest/api/2/issue/%s" issue-key)))
+
+(defun org-jira-mini-fetch-sync (api &rest args)
+  "Invoke the corresponding jira rest method API.
+Invoking COMPLETE-CALLBACK when the
+JIRALIB-COMPLETE-CALLBACK is non-nil, request finishes, and
+passing ARGS to REQUEST."
+  (unless api (error "jiralib--rest-call-it was called with a NIL api value."))
+  (setq args
+        (mapcar
+         (lambda (arg)
+           (if (stringp arg)
+               (encode-coding-string arg jiralib-coding-system)
+             arg))
+         args))
+  (append (request-response-data
+           (apply #'request (if (string-match "^http[s]*://" api) api ;; If an absolute path, use it
+                              (concat (replace-regexp-in-string "/*$" "/"
+                                                                jiralib-url)
+                                      (replace-regexp-in-string "^/*" "" api)))
+                  :sync t
+                  :headers `(,jiralib-token
+                             ("Content-Type" . "application/json"))
+                  :parser 'jiralib--json-read
+                  ;; Ensure we have useful errors
+                  :error
+                  (let ((--cl-my-api--
+                         (make-symbol "--my-api--"))
+                        (--cl-my-args--
+                         (make-symbol "--my-args--")))
+                    (progn
+                      (let* ((v --cl-my-api--))
+                        (set v api))
+                      (let* ((v --cl-my-args--))
+                        (set v args)))
+                    (list 'lambda
+                          '(&rest --cl-rest--)
+                          '"\n\n(fn &key DATA &allow-other-keys)"
+                          (list 'apply
+                                (list 'function
+                                      #'(lambda
+                                          (G984 G985 &rest --cl-rest--)
+                                          (let* ((data
+                                                  (car
+                                                   (cdr
+                                                    (plist-member --cl-rest--
+                                                                  ':data)))))
+                                            (progn
+                                              (print
+                                               "JIRA_ERROR - see your *Messages* buffer for more details.")
+                                              (print "JIRA_ERROR REQUEST: ")
+                                              (print
+                                               (symbol-value G985))
+                                              (print
+                                               (symbol-value G984))
+                                              (print "JIRA_ERROR RESPONSE: ")
+                                              (print data)
+                                              (error
+                                               "JIRA_ERROR - see your *Messages* buffer for more details.")))))
+                                (list 'quote --cl-my-args--)
+                                (list 'quote --cl-my-api--)
+                                '--cl-rest--)))
+                  args))
+          nil))
+
+(defun org-jira-mini-jira-retrieve-issue-key-from-git-branch (str)
+  "Retrieve jira issue from STR."
+  (let ((re "[[:upper:]]+[-_][[:digit:]]+"))
+    (when (string-match-p re str)
+      (replace-regexp-in-string
+       (concat ".*?\\(" re "\\).*")
+       "\\1"
+       str))))
+
+
+(defun org-jira-mini-git-commit-setup ()
+  (when (and (bound-and-true-p jiralib-url)
+             (string-prefix-p "https://" jiralib-url))
+    (when-let* ((branch
+                 (ignore-errors
+                   (car
+                    (process-lines "git" "rev-parse"
+                                   "--abbrev-ref" "HEAD"))))
+                (issue-key (org-jira-mini-jira-retrieve-issue-key-from-git-branch
+                            branch))
+                (url (concat
+                      "[" issue-key "]" "("
+                      (replace-regexp-in-string "/$" ""
+                                                jiralib-url)
+                      "/browse/"
+                      issue-key
+                      ")"))
+                (title (format "%s:" issue-key))
+                (buffer (current-buffer)))
+      (unless (save-excursion
+                (re-search-forward
+                 title
+                 nil t 1))
+        (insert title)
+        (let ((p (point)))
+          (jiralib-call "getIssue"
+                        (cl-function
+                         (lambda (&rest data &allow-other-keys)
+                           (let* ((data (cl-getf data :data))
+                                  (summary (alist-get
+                                            'summary
+                                            (alist-get
+                                             'fields
+                                             data))))
+                             (when (and summary
+                                        (buffer-live-p buffer))
+                               (with-current-buffer buffer
+                                 (save-excursion
+                                   (goto-char p)
+                                   (when (and
+                                          (looking-back (regexp-quote title) 0)
+                                          (string-empty-p
+                                           (string-trim
+                                            (buffer-substring-no-properties
+                                             p (line-end-position)))))
+                                     (insert "\s" summary))))))))
+                        issue-key))
+        (save-excursion
+          (end-of-line)
+          (newline-and-indent 2)
+          (insert (format "%s:" url)))))))
+
+(add-hook 'git-commit-setup-hook #'org-jira-mini-git-commit-setup)
+
 (defun org-jira-mini-jump-to-jira-issue (issue)
   "Jump to jira ISSUE."
-  (when-let* ((issue (or (assoc issue org-jira-mini-current-tasks) issue))
-              (pl (caddr issue))
-              (buff (with-current-buffer
-                        (or (get-file-buffer (plist-get pl
-                                                        :file))
-                            (find-file-noselect
-                             (plist-get pl
-                                        :file)))
-                      (widen)
-                      (goto-char (plist-get pl :begin))
-                      (narrow-to-region (plist-get pl :begin)
-                                        (plist-get pl :end))
-                      (org-fold-show-all)
-                      (current-buffer))))
+  (when-let* ((file (org-jira--get-project-file-name (nth 3 issue)))
+              (buff (and (file-exists-p file)
+                         (with-current-buffer (or (get-file-buffer file)
+                                                  (find-file-noselect file))
+                           (when-let ((found
+                                       (org-find-entry-with-id (car issue))))
+                             (goto-char found)
+                             (current-buffer))))))
     (if (minibuffer-window-active-p (selected-window))
         (with-minibuffer-selected-window
           (pop-to-buffer-same-window buff))
@@ -3395,6 +3537,383 @@ storing them in the variable `org-jira-mini-current-tasks`."
                         (setq acc (nconc items acc))))
                     (org-jira-mini-get-project-filenames) '())))
 
+(defun org-jira-alist-path (alist &rest args)
+  "Retrieve a nested value from an ALIST using a path of keys.
+
+Argument ALIST is a list of pairs (also known as an association list) that the
+function will traverse.
+Argument ARGS is a list of keys that the function will use to traverse the
+association list alist."
+  (let ((arg)
+        (al alist))
+    (while (and al (setq arg (pop args)))
+      (setq al (alist-get arg al)))
+    al))
+
+
+(defun org-jira-normalize-issue (issue)
+  (require 'parse-time)
+  (unless (null issue)
+    (let* ((key (alist-get 'key issue))
+           (fields (alist-get 'fields issue))
+           (project (org-jira-alist-path fields 'project 'key))
+           (summary (alist-get 'summary fields))
+           (status (alist-get 'status fields))
+           (description (alist-get 'description fields))
+           (status-name (alist-get 'name status))
+           (face-scheme
+            (when status-name
+              (cdr
+               (assoc-string
+                status-name
+                org-todo-keyword-faces))))
+           (label (string-join
+                   (delq nil
+                         (list (if face-scheme
+                                   (propertize (substring-no-properties
+                                                key)
+                                               'face
+                                               face-scheme)
+                                 key)
+                               (or summary "")
+                               (if (and face-scheme status-name)
+                                   (propertize (substring-no-properties
+                                                status-name)
+                                               'face
+                                               face-scheme)
+                                 status-name)))
+                   " ")))
+      (list label key summary status-name project description))))
+
+
+(defvar org-jira-mini-current-tasks nil)
+(defvar org-jira-mini-ivy-keymap
+  (let ((map (make-sparse-keymap)))
+    map))
+
+(defvar-local org-jira-mini-executing-macro nil)
+(defvar org-jira-mini-timer nil)
+(defvar ivy--all-candidates)
+(defvar ivy-text)
+(defvar ivy-last)
+(defvar cl-struct-ivy-state-tags)
+
+(defun org-jira-mini-read-issues (&optional action)
+  "Read JIRA issues and display them in the minibuffer for selection.
+Optional argument ACTION is a function to be called with the selected issue.
+Reads JIRA issues and displays them in the minibuffer for selection.
+Returns the selected issue."
+  (require 'ivy)
+  (let ((done nil)
+        (result)
+        (org-jira-mini-timer)
+        (request)
+        (jira-alist)
+        (jira-keys)
+        (rendered-lengths 0))
+    (setq org-jira-mini-timer
+          (run-with-timer 0.3
+                          0.3
+                          (lambda ()
+                            (unless request (setq request
+                                                  (org-jira-mini-async-request)))
+                            (unless done
+                              (when-let ((mini
+                                          (and
+                                           org-jira-mini-alist
+                                           (not done)
+                                           (active-minibuffer-window))))
+                                (when (> (length org-jira-mini-alist)
+                                         rendered-lengths)
+                                  (setq rendered-lengths
+                                        (length org-jira-mini-alist))
+                                  (with-selected-window
+                                      mini
+                                    (cond ((and (or (bound-and-true-p fido-mode)
+                                                    (bound-and-true-p
+                                                     fido-vertical-mode))
+                                                (fboundp 'icomplete-exhibit))
+                                           (icomplete-exhibit)
+                                           (unless (or org-jira-mini-executing-macro
+                                                       (not (car org-jira-mini-alist)))
+                                             (org-jira-mini-run-in-minibuffer)))
+                                          ((and
+                                            (eq completing-read-function
+                                                'ivy-completing-read))
+                                           (setq done t)
+                                           (jiralib-do-jql-search
+                                            "assignee = currentUser() and resolution = unresolved"
+                                            100
+                                            (cl-function
+                                             (lambda (&rest data &allow-other-keys)
+                                               (let* ((data (cl-getf data :data))
+                                                      (issues (append (alist-get 'issues data) nil))
+                                                      (items (mapcar #'org-jira-normalize-issue issues)))
+                                                 (when (active-minibuffer-window)
+                                                   (setq jira-alist items)
+                                                   (setq org-jira-mini-alist jira-alist)
+                                                   (setq jira-keys (mapcar 'car items))
+                                                   (ivy-update-candidates
+                                                    jira-keys)
+                                                   (let ((input ivy-text)
+                                                         (pos
+                                                          (when-let ((wind
+                                                                      (active-minibuffer-window)))
+                                                            (with-selected-window
+                                                                wind
+                                                              (point)))))
+                                                     (when (active-minibuffer-window)
+                                                       (with-selected-window (active-minibuffer-window)
+                                                         (delete-minibuffer-contents)))
+                                                     (progn
+                                                       (or
+                                                        (progn
+                                                          (and
+                                                           (memq
+                                                            (type-of ivy-last)
+                                                            cl-struct-ivy-state-tags)
+                                                           t))
+                                                        (signal 'wrong-type-argument
+                                                                (list 'ivy-state ivy-last)))
+                                                       (let* ((v ivy-last))
+                                                         (aset v 2 ivy--all-candidates)))
+                                                     (when (and (fboundp 'ivy-state-preselect)
+                                                                (boundp 'ivy--index))
+                                                       (progn
+                                                         (or
+                                                          (progn
+                                                            (and
+                                                             (memq
+                                                              (type-of ivy-last)
+                                                              cl-struct-ivy-state-tags)
+                                                             t))
+                                                          (signal 'wrong-type-argument
+                                                                  (list 'ivy-state ivy-last)))
+                                                         (let* ((v ivy-last))
+                                                           (aset v 7 ivy--index))))
+                                                     (when (fboundp 'ivy--reset-state)
+                                                       (ivy--reset-state
+                                                        ivy-last))
+                                                     (when-let ((wind
+                                                                 (active-minibuffer-window)))
+                                                       (with-selected-window
+                                                           wind
+                                                         (insert input)
+                                                         (goto-char
+                                                          (when pos
+                                                            (if (> pos
+                                                                   (point-max))
+                                                                (point-max)
+                                                              pos)))
+                                                         (when (fboundp 'ivy--exhibit)
+                                                           (ivy--exhibit)))))))))))))))))))
+    (unwind-protect
+        (minibuffer-with-setup-hook #'org-jira-mini-read-setup-minibuffer
+          (setq result (completing-read
+                        "Issue "
+                        (completion-table-dynamic (lambda (&rest _i)
+                                                    org-jira-mini-alist)))))
+      (when org-jira-mini-timer
+        (cancel-timer org-jira-mini-timer)
+        (setq org-jira-mini-timer nil)))
+    (if action
+        (funcall action (org-jira-mini-issue-display-to-real result)))
+    result))
+
+(defun org-jira-ivy-read-issue (&optional prompt)
+  (interactive)
+  (when (and (fboundp 'ivy-update-candidates)
+             (fboundp 'ivy--reset-state)
+             (fboundp 'ivy--exhibit)
+             (boundp 'ivy-text)
+             (boundp 'ivy-exit)
+             (boundp 'ivy-last)
+             (boundp 'ivy--all-candidates)
+             (boundp 'cl-struct-ivy-state-tags)
+             (boundp 'ivy--index)
+             (fboundp 'ivy-read)
+             (fboundp 'ivy-recompute-index-swiper-async)
+             (fboundp 'ivy-configure))
+    (let ((caller 'org-jira-ivy-read-issue))
+      (setq this-command caller)
+      (ivy-configure caller
+        :index-fn #'ivy-recompute-index-swiper-async)
+      (let* ((jira-alist)
+             (jira-keys)
+             (buff (current-buffer)))
+        (when (fboundp 'ivy-set-actions)
+          (ivy-set-actions 'org-jira-ivy-read-issue
+                           (org-jira-mini-defun-ivy-bind-actions
+                            `(("C-j"
+                               ,(org-jira-mini-issue-display-to-real-action
+                                 'org-jira-mini-jump-to-jira-issue)
+                               "jump" :no-exit t)
+                              ("C-c g g"
+                               ,(org-jira-mini-issue-display-to-issue-key-action
+                                 'org-jira-mini-browse-issue)
+                               "open with browser")
+                              ("<C-return>"
+                               ,(org-jira-mini-issue-display-to-issue-key-action
+                                 'org-jira-mini-browse-issue)
+                               "open with browser")
+                              ("C-c o"
+                               ,(org-jira-mini-issue-display-to-real-action
+                                 'org-jira-mini-jump-to-issue-other-window)
+                               "jump to other window")
+                              ("C-c w"
+                               ,(org-jira-mini-issue-display-to-real-action
+                                 'org-jira-mini-add-or-update-worklog)
+                               "add worklog")
+                              ("C-c u"
+                               ,(org-jira-mini-issue-display-to-real-action
+                                 'org-jira-mini-update-worklog)
+                               "update worklog")
+                              ("M-g"
+                               ,(org-jira-mini-issue-display-to-real-action
+                                 'org-jira-mini-copy-branch-action)
+                               "copy git branch"))
+                            org-jira-mini-ivy-keymap)))
+        (jiralib-do-jql-search
+         "assignee = currentUser() ORDER BY updated DESC"
+         100
+         (cl-function
+          (lambda (&rest data
+                         &allow-other-keys)
+            (let* ((data (cl-getf data :data))
+                   (issues (append (alist-get
+                                    'issues data) nil))
+                   (items (mapcar
+                           #'org-jira-normalize-issue
+                           issues)))
+              (when (and
+                     (active-minibuffer-window)
+                     (buffer-live-p buff))
+                (with-current-buffer buff
+                  (setq jira-alist items)
+                  (setq org-jira-mini-alist jira-alist)
+                  (setq jira-keys (mapcar 'car items)))
+                (ivy-update-candidates
+                 jira-keys)
+                (let ((input ivy-text)
+                      (pos
+                       (when-let ((wind
+                                   (active-minibuffer-window)))
+                         (with-selected-window
+                             wind
+                           (point)))))
+                  (when (active-minibuffer-window)
+                    (with-selected-window
+                        (active-minibuffer-window)
+                      (delete-minibuffer-contents)))
+                  (progn
+                    (or
+                     (progn
+                       (and
+                        (memq
+                         (type-of ivy-last)
+                         cl-struct-ivy-state-tags)
+                        t))
+                     (signal
+                      'wrong-type-argument
+                      (list 'ivy-state
+                            ivy-last)))
+                    (let* ((v ivy-last))
+                      (aset v 2
+                            ivy--all-candidates)))
+                  (when (fboundp
+                         'ivy-state-preselect)
+                    (progn
+                      (or
+                       (progn
+                         (and
+                          (memq
+                           (type-of ivy-last)
+                           cl-struct-ivy-state-tags)
+                          t))
+                       (signal
+                        'wrong-type-argument
+                        (list
+                         'ivy-state
+                         ivy-last)))
+                      (let* ((v ivy-last))
+                        (aset v 7 ivy--index))))
+                  (ivy--reset-state
+                   ivy-last)
+                  (when-let ((wind
+                              (active-minibuffer-window)))
+                    (with-selected-window
+                        wind
+                      (insert input)
+                      (goto-char
+                       (when pos
+                         (if (> pos
+                                (point-max))
+                             (point-max)
+                           pos)))
+                      (ivy--exhibit)))))))))
+        (let ((label
+               (ivy-read (or prompt "") jira-keys
+                         :caller caller
+                         :keymap org-jira-mini-ivy-keymap)))
+          (cdr (assoc label
+                      jira-alist)))))))
+
+(defun org-jira-mini-progress-issue ()
+  (interactive)
+  (let* ((issue-id (car (org-jira-ivy-read-issue)))
+         (actions (jiralib-get-available-actions
+                   issue-id))
+         (action (org-jira-read-action actions))
+         (fields (jiralib-get-fields-for-action issue-id action))
+         (org-jira-rest-fields fields)
+         (field-key)
+         (custom-fields-collector nil)
+         (custom-fields
+          (progn
+          ;; delete those elements in fields, which have
+          ;; already been set in custom-fields-collector
+            (when (and (fboundp 'cl-remove-if)
+                       (fboundp 'cl-member-if))
+              (while fields
+                (setq fields
+                      (cl-remove-if
+                       (lambda (strstr)
+                         (cl-member-if (lambda (symstr)
+                                         (string= (car strstr)  (symbol-name (car symstr))))
+                                       custom-fields-collector))
+                       fields))
+                (setq field-key (org-jira-read-field fields))
+                (if (not field-key)
+                    (setq fields nil)
+                  (setq custom-fields-collector
+                        (cons
+                         (funcall (if jiralib-use-restapi
+                                      #'list
+                                    #'cons)
+                                  field-key
+                                  (if (eq field-key 'resolution)
+                                      (org-jira-read-resolution)
+                                    (let ((field-value (completing-read
+                                                        (format "Please enter %s's value: "
+                                                                (cdr (assoc (symbol-name field-key) fields)))
+                                                        org-jira-fields-values-history
+                                                        nil
+                                                        nil
+                                                        nil
+                                                        'org-jira-fields-values-history)))
+                                      (if jiralib-use-restapi
+                                          (cons 'name field-value)
+                                        field-value))))
+                         custom-fields-collector)))))
+            custom-fields-collector)))
+    (jiralib-progress-workflow-action
+     issue-id
+     action
+     custom-fields
+     (cl-function
+      (lambda (&key _data &allow-other-keys)
+        (org-jira-mini-async-request))))))
+
 (defun org-jira-mini-fontify-issue (issue-str)
   "Fontify a string ISSUE-STR.
 ISSUE-STR is a JIRA issue string to fontify."
@@ -3406,6 +3925,9 @@ ISSUE-STR is a JIRA issue string to fontify."
         (concat (propertize id 'face face) "\s" title "\s"
                 (propertize status 'face face))
       issue-str)))
+
+
+
 
 (defun org-jira-mini-transfrom-org-isssue (issue)
   "Convert org element with ISSUE to string."
@@ -3421,20 +3943,33 @@ ISSUE-STR is a JIRA issue string to fontify."
 
 (defun org-jira-mini-jump-to-issue-other-window (issue)
   "Jump to jira ISSUE in other window."
-  (let* ((orig-wind (selected-window))
-         (wind-target (if (minibuffer-window-active-p orig-wind)
-                          (with-minibuffer-selected-window
-                            (let ((wind (selected-window)))
-                              (or
-                               (window-right wind)
-                               (window-left wind)
-                               (split-window-right))))
-                        (let ((wind (selected-window)))
-                          (or
-                           (window-right wind)
-                           (window-left wind)
-                           (split-window-right))))))
-    (with-selected-window wind-target
+  (if (active-minibuffer-window)
+      (with-minibuffer-selected-window
+        (let ((wind (selected-window)))
+          (or
+           (window-right wind)
+           (window-left wind)
+           (split-window-right))))
+    (with-selected-window
+        (let ((wind (selected-window)))
+          (or
+           (window-right wind)
+           (window-left wind)
+           (split-window-right)))
+      (when-let* ((file (org-jira--get-project-file-name (nth 3 issue)))
+                  (buff (and (file-exists-p file)
+                             (with-current-buffer
+                                 (or (get-file-buffer file)
+                                     (find-file-noselect file))
+                               (when-let
+                                   ((found
+                                     (org-find-entry-with-id (car issue))))
+                                 (goto-char found)
+                                 (current-buffer))))))
+        (if (minibuffer-window-active-p (selected-window))
+            (with-minibuffer-selected-window
+              (pop-to-buffer-same-window buff))
+          (pop-to-buffer-same-window buff)))
       (org-jira-mini-jump-to-jira-issue issue))))
 
 (defun org-jira-mini-read-woklog-data ()
@@ -3525,8 +4060,6 @@ Result is a list with start date in iso format and duration in seconds."
       (let ((inhibit-message t))
         (save-buffer)))))
 
-(defvar org-jira-mini-timer nil)
-
 (defun org-jira-mini-wait (buffer)
   "Wait for a BUFFER to stop being modified and save it periodically.
 Argument BUFFER is the buffer to wait for."
@@ -3553,6 +4086,8 @@ ISSUES is a list of the variable `org-jira-sdk-issue' records."
   (org-jira-log (format "About to render %d issues." (length Issues)))
   ;; If we have any left, we map over them.
   (mapc #'org-jira--render-issue Issues)
+  (with-current-buffer (org-jira--get-project-buffer (-last-item Issues))
+    (save-buffer))
   (org-jira--get-project-buffer (-last-item Issues)))
 
 (defun org-jira-mini-async-callback (&rest args)
@@ -3571,21 +4106,8 @@ Will send a list of `'org-jira-sdk-issue' objects to the list printer."
           (let ((it
                  (org-jira-sdk-create-issues-from-data-list
                   it)))
-            (let ((buff
-                   (org-jira-mini-render-issues-from-issue-list
-                    it)))
-              (org-jira-mini-wait buff)
-              (run-with-timer 0.5 nil
-                              (lambda
-                                ()
-                                (org-jira-mini-save-all-project-buffers)
-                                (org-jira-mini-map-issues)
-                                (setq org-jira-mini-loading nil))))))))))
-
-(defun org-jira-mini-map-issues ()
-  "Set `org-jira-mini-issues'."
-  (setq org-jira-mini-issues (mapcar #'org-jira-mini-transfrom-org-isssue
-                               (org-jira-mini-init-issues))))
+            (org-jira-mini-render-issues-from-issue-list
+             it)))))))
 
 (defun org-jira-mini-async-request ()
   "Call `org-jira-get-issue-list' with callback `org-jira-mini-async-callback'."
@@ -3594,7 +4116,8 @@ Will send a list of `'org-jira-sdk-issue' objects to the list printer."
     (org-jira-get-issue-list
      #'org-jira-mini-async-callback)))
 
-(defun org-jira-mini-defun-ivy-bind-actions (actions keymap &optional command-name)
+(defun org-jira-mini-defun-ivy-bind-actions (actions keymap &optional
+                                                     command-name)
   "Bind ivy ACTIONS to KEYMAP.
 Optional argument COMMAND-NAME is used for actions documentation."
   (let ((map keymap)
@@ -3709,9 +4232,6 @@ Optional argument COMMAND-NAME is used for actions documentation."
             (push (list action-key func descr) result)))))
     result))
 
-(defvar org-jira-mini-ivy-keymap
-  (let ((map (make-sparse-keymap)))
-    map))
 
 (defun org-jira-mini-read-setup-minibuffer ()
   "Setup minuffer."
@@ -3748,7 +4268,7 @@ Optional argument COMMAND-NAME is used for actions documentation."
                         "copy git branch"))
                      org-jira-mini-ivy-keymap)))
        (when (fboundp 'ivy-set-actions)
-         (ivy-set-actions 'org-jira-mini-read-issues-sync
+         (ivy-set-actions this-command
                           actions))
        (use-local-map
         (let ((map (copy-keymap
@@ -3756,7 +4276,7 @@ Optional argument COMMAND-NAME is used for actions documentation."
           (set-keymap-parent map (current-local-map))
           map))))))
 
-(defvar-local org-jira-mini-executing-macro nil)
+
 
 (defun org-jira-mini-run-in-minibuffer ()
   "Run a macro in the minibuffer using the first four characters of an issue.
@@ -3775,85 +4295,36 @@ first four characters of a JIRA issue as input."
             (execute-kbd-macro c)))))))
 
 (declare-function ivy-update-candidates "ivy")
-(defun org-jira-mini-read-issues (&optional action)
-  "Read JIRA issues and display them in the minibuffer for selection.
-Optional argument ACTION is a function to be called with the selected issue.
-Reads JIRA issues and displays them in the minibuffer for selection.
-Returns the selected issue."
-  (let ((done nil)
-        (result)
-        (org-jira-mini-timer)
-        (request)
-        (rendered-lengths 0))
-    (setq org-jira-mini-timer
-          (run-with-timer 0.3
-                          0.3
-                          (lambda ()
-                            (unless request (setq request
-                                                  (org-jira-mini-async-request)))
-                            (unless done
-                              (when-let ((mini
-                                          (and
-                                           org-jira-mini-issues
-                                           (not done)
-                                           (active-minibuffer-window))))
-                                (when (> (length org-jira-mini-issues)
-                                         rendered-lengths)
-                                  (setq rendered-lengths
-                                        (length org-jira-mini-issues))
-                                  (with-selected-window
-                                      mini
-                                    (cond ((and (or (bound-and-true-p fido-mode)
-                                                    (bound-and-true-p
-                                                     fido-vertical-mode))
-                                                (fboundp 'icomplete-exhibit))
-                                           (icomplete-exhibit))
-                                          ((and
-                                            (eq completing-read-function
-                                                'ivy-completing-read))
-                                           (ivy-update-candidates
-                                            (org-jira-mini-map-issues))))
-                                    (unless (or org-jira-mini-executing-macro
-                                                (not (car org-jira-mini-issues)))
-                                      (org-jira-mini-run-in-minibuffer)))))))))
-    (unwind-protect
-        (minibuffer-with-setup-hook #'org-jira-mini-read-setup-minibuffer
-          (setq result (completing-read
-                        "Issue "
-                        (completion-table-dynamic (lambda (&rest _i)
-                                                    org-jira-mini-issues)))))
-      (when org-jira-mini-timer
-        (cancel-timer org-jira-mini-timer)
-        (setq org-jira-mini-timer nil)))
-    (if action
-        (funcall action (org-jira-mini-issue-display-to-real result)))
-    result))
 
 ;;;###autoload
 (defun org-jira-mini-jump-to-issue ()
   "Jump to a JIRA issue."
   (interactive)
+  (org-jira-mini-async-request)
   (org-jira-mini-read-issues #'org-jira-mini-jump-to-jira-issue))
 
 ;;;###autoload
 (defun org-jira-mini-copy-issue-key ()
   "Copy the issue key of a JIRA issue to the kill ring."
   (interactive)
-  (org-jira-mini-read-issues (org-jira-mini-fp-compose (org-jira-mini-fp-converge message
-                                                      [identity kill-new])
-                                         car-safe)))
+  (let ((issue-key (car (org-jira-ivy-read-issue "Issue: "))))
+    (kill-new issue-key)
+    (message "Copied %s" issue-key)
+    issue-key))
 
 ;;;###autoload
 (defun org-jira-mini-update-issue-worklog ()
   "Read issues from JIRA and update the worklog for each issue."
   (interactive)
-  (org-jira-mini-read-issues #'org-jira-mini-update-worklog))
+  (org-jira-mini-update-worklog
+   (car (org-jira-ivy-read-issue "Issue: "))))
 
 ;;;###autoload
 (defun org-jira-mini-add-issue-worklog ()
   "Read issues from JIRA and add or update worklog for each issue."
   (interactive)
-  (org-jira-mini-read-issues #'org-jira-mini-add-or-update-worklog))
+  (org-jira-mini-add-or-update-worklog
+   (car (org-jira-ivy-read-issue "Issue: "))))
 
 (defun org-jira-mini-on-issue-p ()
   "Return non-nil if the point is on a JIRA issue."
@@ -3871,12 +4342,21 @@ Returns the selected issue."
   "Command dispatcher for Jira commands."
   [["Issues"
     ("b" "Jump to issue" org-jira-mini-jump-to-issue)
-    ("c" "Copy" org-jira-mini-copy-issue-key)]
+    ("c" "Copy" org-jira-mini-copy-issue-key)
+    ("p" "Progress" org-jira-mini-progress-issue)]
    ["Worklog"
     ("wa" "Add" org-jira-mini-add-issue-worklog)
     ("wu" "Update" org-jira-mini-update-issue-worklog)
     ("wU" "Update Worklogs From Org Clocks"
-     org-jira-update-worklogs-from-org-clocks)]]
+     org-jira-update-worklogs-from-org-clocks)]
+   ["Org"
+    ("i" "Get Issues" org-jira-get-issues)
+    ("I" "Get Issues By Board" org-jira-get-issues-by-board)
+    ("B" "Get Boards" org-jira-get-boards)
+    ("P" "Get Projects" org-jira-get-projects)
+    ("l" "Get Issues From Custom Jql"
+     org-jira-get-issues-from-custom-jql)
+    ("C" "Create Issue" org-jira-create-issue)]]
   [:if-derived org-mode
                ("J" "Todo To Jira" org-jira-todo-to-jira :inapt-if
                 org-jira-parse-issue-id)
@@ -3890,10 +4370,8 @@ Returns the selected issue."
                ("a" "Assign Issue" org-jira-assign-issue)
                ("j" "Browse Issue" org-jira-browse-issue :inapt-if-not
                 org-jira-mini-on-issue-p)
-               ("C" "Create Issue" org-jira-create-issue)
                ("f" "Get Issues By Fixversion"
                 org-jira-get-issues-by-fixversion)
-               ("i" "Get Issues" org-jira-get-issues)
                ("h" "Get Issues Headonly" org-jira-get-issues-headonly)
                ("y" "Copy Current Issue Key" org-jira-copy-current-issue-key
                 :inapt-if-not org-jira-mini-on-issue-p)
@@ -3904,12 +4382,7 @@ Returns the selected issue."
                ("U" "Update Issue" org-jira-update-issue :inapt-if-not
                 org-jira-id)
                ("p" "Progress Issue" org-jira-progress-issue :inapt-if-not
-                org-jira-id)
-               ("l" "Get Issues From Custom Jql"
-                org-jira-get-issues-from-custom-jql)
-               ("I" "Get Issues By Board" org-jira-get-issues-by-board)
-               ("B" "Get Boards" org-jira-get-boards)
-               ("P" "Get Projects" org-jira-get-projects)]
+                org-jira-id)]
   (interactive)
   (unless jiralib-token
     (org-jira-mini-login))
