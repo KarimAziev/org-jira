@@ -191,18 +191,18 @@ where both are strings.  NEW-FILE-NAME is relative to
   :group 'org-jira
   :type '(repeat (string :tag "Jira state name:")))
 
-(defcustom org-jira-users
-  '(("Full Name" . "account-id"))
+(defcustom org-jira-users '(("Full Name" . "account-id"))
   "A list of displayName and key pairs."
   :group 'org-jira
-  :type 'list)
+  :type '(repeat (cons (string :tag "From")
+                       (string :tag "To"))))
 
-(defcustom org-jira-progress-issue-flow
-  '(("To Do" . "In Progress")
-    ("In Progress" . "Done"))
+(defcustom org-jira-progress-issue-flow '(("To Do" . "In Progress")
+                                          ("In Progress" . "Done"))
   "Quickly define a common issue flow."
   :group 'org-jira
-  :type 'list)
+  :type '(repeat (cons (string :tag "From")
+                       (string :tag "To"))))
 
 (defcustom org-jira-property-overrides (list)
   "An assoc list of property tag overrides.
@@ -216,7 +216,7 @@ block to :WorkedBy:, you can set this as such:
 
 or simply:
 
-  (add-to-list (quote org-jira-property-overrides)
+  (add-to-list \\='org-jira-property-overrides
                (cons (\"assignee\" \"WorkedBy\")))
 
 This will work for most any of the properties, with the
@@ -226,7 +226,9 @@ exception of ones with unique functionality, such as:
   - summary
   - description"
   :group 'org-jira
-  :type 'list)
+  :type '(alist
+          :key-type string
+          :value-type string))
 
 (defcustom org-jira-serv-alist nil
   "Association list to set information for each jira server.
