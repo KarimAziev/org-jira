@@ -3972,18 +3972,45 @@ ISSUE-STR is a JIRA issue string to fontify."
           (pop-to-buffer-same-window buff)))
       (org-jira-mini-jump-to-jira-issue issue))))
 
+
+(defun org-jira-last-weekday-at (&optional hour minute)
+  "Determine the time of the last weekday at a specified HOUR and MINUTE.
+
+Optional argument HOUR is an integer representing the HOUR of the day,
+defaulting to 10 if not provided.
+
+Optional argument MINUTE is an integer representing the MINUTE of the HOUR,
+defaulting to 0 if not provided."
+  (let* ((current-date (current-time))
+         (current-day (string-to-number (format-time-string "%u" current-date)))
+         (days-backward (- current-day 2)))
+    (when (<= current-day 1)
+      (setq days-backward (- current-day 7))) ; Account for weekends
+    (let* ((last-weekday (time-subtract current-date
+                                        (days-to-time days-backward)))
+           (decoded-time (decode-time last-weekday)))
+      (setf (nth 0 decoded-time) 0) ; second
+      (setf (nth 1 decoded-time)
+            (or minute 0))      ; minute
+      (setf (nth 2 decoded-time)
+            (or hour 10))       ; hour
+      (apply #'encode-time decoded-time))))
+
 (defun org-jira-mini-read-woklog-data ()
   "Read start date and duration for worklog.
-Result is a list with start date in iso format and duration in seconds."
+Result is a list with start date in ISO format and duration in seconds."
   (require 'idate nil t)
-  (let* ((start-date (org-jira-mini-time-format-to-iso-date-time
-                      (when (fboundp 'idate-read)
-                        (idate-read
-                       "Worklog start time  "))
-                      "UTC"))
+  (let* ((start-date
+          (if (fboundp 'idate-read)
+              (idate-read "Worklog start time: " (org-jira-last-weekday-at))
+            (org-read-date t t nil "Worklog start time: "
+                           (org-jira-last-weekday-at))))
+         (iso-start-time (org-jira-mini-time-format-to-iso-date-time
+                          start-date
+                          "UTC"))
          (hours (read-number "Hours:" 8))
          (secs (org-jira-mini-hours-to-seconds hours)))
-    (list start-date secs)))
+    (list iso-start-time secs)))
 
 (defun org-jira-mini-add-or-update-worklog (issue-key &optional worklog-id)
   "Add or update (if WORKLOG-ID is non nil) worklog for ISSUE-KEY."
