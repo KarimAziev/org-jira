@@ -1942,10 +1942,14 @@ Argument HEADING is the heading of the child element to search for."
       (buffer-substring-no-properties beg end))))
 
 (defun org-jira-fetch-attachment (url &optional file)
-  "Fetches a Jira attachment from a given URL and saves it to a FILE.
+  "Download a Jira attachment from a given URL and save it to a specified FILE.
 
-Argument FILE is an optional argument that specifies the file where the fetched
-Jira attachment will be saved."
+Argument URL is a string that represents the URL from which the attachment will
+be fetched.
+
+Optional argument FILE is a string that represents the name of the FILE where
+the fetched attachment will be saved.
+If not provided, the attachment will be saved with its original name."
   (let ((url-request-extra-headers
          `(,jiralib-token)))
     (url-retrieve
@@ -1968,9 +1972,10 @@ Jira attachment will be saved."
      nil t)))
 
 (defun org-jira-load-item-attachments (proj-key attachments)
-  "Download and save Jira ATTACHMENTS for a specific project.
+  "Load and store Jira item ATTACHMENTS in a specified directory.
 
-Argument ATTACHMENTS is a list of attachments that need to be loaded."
+Argument PROJ-KEY is a string that represents the project key.
+Argument ATTACHMENTS is a list of ATTACHMENTS associated with the project."
   (let ((repls)
         (parent org-jira-working-dir)
         (dir))
@@ -3351,18 +3356,21 @@ If the branch name cannot be created, raise an error with a message."
 
 
 (defun org-jira-mini-fetch-issue-sync (issue-key)
-  "Invoke the corresponding jira rest method API.
-Invoking COMPLETE-CALLBACK when the
-JIRALIB-COMPLETE-CALLBACK is non-nil, request finishes, and
-passing ARGS to REQUEST."
+  "Fetch and sync a specific Jira issue using its key.
+
+Argument ISSUE-KEY is a string that represents the key of the issue to be
+fetched."
   (org-jira-mini-fetch-sync (format "/rest/api/2/issue/%s" issue-key)))
 
 (defun org-jira-mini-fetch-sync (api &rest args)
-  "Invoke the corresponding jira rest method API.
-Invoking COMPLETE-CALLBACK when the
-JIRALIB-COMPLETE-CALLBACK is non-nil, request finishes, and
-passing ARGS to REQUEST."
-  (unless api (error "jiralib--rest-call-it was called with a NIL api value."))
+  "Fetch and sync data from JIRA API, handling errors and encoding strings.
+
+Argument API is a string that represents the API endpoint to be called.
+
+Optional argument ARGS is a list of arguments that will be passed to the API
+call.
+It is optional and can be left empty."
+  (unless api (error "jiralib--rest-call-it was called with a NIL api value"))
   (setq args
         (mapcar
          (lambda (arg)
@@ -3413,7 +3421,7 @@ passing ARGS to REQUEST."
                                               (print "JIRA_ERROR RESPONSE: ")
                                               (print data)
                                               (error
-                                               "JIRA_ERROR - see your *Messages* buffer for more details.")))))
+                                               "JIRA_ERROR - see your *Messages* buffer for more details")))))
                                 (list 'quote --cl-my-args--)
                                 (list 'quote --cl-my-api--)
                                 '--cl-rest--)))
@@ -3431,6 +3439,7 @@ passing ARGS to REQUEST."
 
 
 (defun org-jira-mini-git-commit-setup ()
+  "Set up git commit message with Jira issue key and summary from branch name."
   (when (and (bound-and-true-p jiralib-url)
              (string-prefix-p "https://" jiralib-url))
     (when-let* ((branch
@@ -3554,6 +3563,9 @@ association list alist."
 
 
 (defun org-jira-normalize-issue (issue)
+  "Normalize a JIRA ISSUE into a list of key components.
+
+Argument ISSUE is a list that represents the ISSUE to be normalized."
   (require 'parse-time)
   (unless (null issue)
     (let* ((key (alist-get 'key issue))
@@ -3723,6 +3735,10 @@ Returns the selected issue."
     result))
 
 (defun org-jira-ivy-read-issue (&optional prompt)
+  "Retrieve and display Jira issues assigned to the current user.
+
+Optional argument PROMPT is a string that provides a message to the user when
+the function is called."
   (interactive)
   (when (and (fboundp 'ivy-update-candidates)
              (fboundp 'ivy--reset-state)
@@ -3861,6 +3877,7 @@ Returns the selected issue."
                       jira-alist)))))))
 
 (defun org-jira-mini-progress-issue ()
+  "Progress a Jira issue by applying a workflow action and updating fields."
   (interactive)
   (let* ((issue-id (car (org-jira-ivy-read-issue)))
          (actions (jiralib-get-available-actions
@@ -4052,7 +4069,7 @@ Result is a list with start date in ISO format and duration in seconds."
                             author))
                          logs))
          (worklog-id
-          (car (last (split-string (completing-read ""
+          (car (last (split-string (completing-read "Worklog id: "
                                                     (mapcar
                                                      (lambda (it)
                                                        (let ((updated
@@ -4263,7 +4280,7 @@ Optional argument COMMAND-NAME is used for actions documentation."
 
 
 (defun org-jira-mini-read-setup-minibuffer ()
-  "Setup minuffer."
+  "Configure minibuffer actions for Jira issue navigation and management."
   (pcase completing-read-function
     ('ivy-completing-read
      (let ((actions (org-jira-mini-defun-ivy-bind-actions
@@ -4349,11 +4366,15 @@ first four characters of a JIRA issue as input."
    (car (org-jira-ivy-read-issue "Issue: "))))
 
 ;;;###autoload
-(defun org-jira-mini-add-issue-worklog ()
-  "Read issues from JIRA and add or update worklog for each issue."
-  (interactive)
+(defun org-jira-mini-add-issue-worklog (&optional issue-key)
+  "Add or update a worklog for a specific Jira issue.
+
+Optional argument ISSUE-KEY is a string representing the key of the issue for
+which the worklog is to be added.
+If not provided, it defaults to nil."
+  (interactive (list (car (org-jira-ivy-read-issue "Issue: "))))
   (org-jira-mini-add-or-update-worklog
-   (car (org-jira-ivy-read-issue "Issue: "))))
+   issue-key))
 
 (defun org-jira-mini-on-issue-p ()
   "Return non-nil if the point is on a JIRA issue."
