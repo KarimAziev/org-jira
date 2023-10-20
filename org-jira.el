@@ -337,6 +337,32 @@ See `org-default-priority' for more info."
   :group 'org-jira
   :type 'boolean)
 
+(defcustom org-jira-default-log-start-time '(10 . 0)
+  "The default start time for logging work in Jira.
+
+The time is specified as a cons cell where the car is the hour and the cdr is
+the minute.
+
+For instance, \\='(10 . 0) signifies a start time of 10:00.
+
+The given time is assumed to be in the system's default timezone."
+  :type '(cons (integer :tag "Hours")
+               (integer :tag "Minutes"))
+  :group 'org-jira)
+
+(defcustom org-jira-default-worklog-duration 8
+  "The default duration, in hours, for a worklog entry in Jira.
+
+This setting is used as the initial duration when logging work to Jira and a
+specific duration isn't provided.
+
+The value should be an integer representing the number of hours.
+
+For example, a value of '8' means the default worklog
+duration will be 8 hours."
+  :type 'integer
+  :group 'org-jira)
+
 (defvar org-jira-serv nil
   "Parameters of the currently selected blog.")
 
@@ -3992,42 +4018,97 @@ ISSUE-STR is a JIRA issue string to fontify."
       (org-jira-mini-jump-to-jira-issue issue))))
 
 
-(defun org-jira-last-weekday-at (&optional hour minute)
-  "Determine the time of the last weekday at a specified HOUR and MINUTE.
 
-Optional argument HOUR is an integer representing the HOUR of the day,
-defaulting to 10 if not provided.
 
-Optional argument MINUTE is an integer representing the MINUTE of the HOUR,
-defaulting to 0 if not provided."
-  (let* ((current-date (current-time))
-         (current-day (string-to-number (format-time-string "%u" current-date)))
-         (days-backward (- current-day 2)))
-    (when (<= current-day 1)
-      (setq days-backward (- current-day 7))) ; Account for weekends
-    (let* ((last-weekday (time-subtract current-date
-                                        (days-to-time days-backward)))
-           (decoded-time (decode-time last-weekday)))
-      (setf (nth 0 decoded-time) 0) ; second
-      (setf (nth 1 decoded-time)
-            (or minute 0))      ; minute
-      (setf (nth 2 decoded-time)
-            (or hour 10))       ; hour
-      (apply #'encode-time decoded-time))))
 
-(defun org-jira-mini-read-woklog-data ()
+(defun org-jira-add-hours (hours encoded-time)
+  "Return ENCODED-TIME with HOURS added."
+  (let ((time (time-to-seconds encoded-time)))
+    (seconds-to-time (+ time (* hours 3600)))))
+
+(defun org-jira-weekday-p (encoded-time)
+  "Determine if a given encoded time represents a weekday.
+
+Argument ENCODED-TIME is a time value in the format used by `current-time' and
+`encode-time', representing the time for which the weekday check is to be
+performed."
+  (let ((day (string-to-number (format-time-string "%u" encoded-time))))
+    (not (>= day 6))))
+
+(defun org-jira-get-previous-weekday-from-time (encoded-time)
+  "Retrieve the timestamp of the last weekday from a given ENCODED-TIME."
+  (let* ((fn (apply-partially #'org-jira-add-hours -24))
+         (curr (funcall fn encoded-time)))
+    (while
+        (not
+         (org-jira-weekday-p curr))
+      (setq curr (funcall fn curr)))
+    curr))
+
+(defun org-jira-calculate-worklog-start-time (initial-date hour minute duration)
+  "Calculate the start time of a worklog entry based on provided parameters.
+
+Argument INITIAL-DATE is a time value in the format used by `current-time'
+and `encode-time'. This represents the initial date from which the
+worklog start time is to be calculated.
+
+Argument HOUR is a numerical value representing the desired start hour of the
+worklog using a 24-hour format.
+
+Argument MINUTE is a numerical value representing the desired start minute of
+the worklog within the start hour.
+
+Argument DURATION is a numerical value representing the desired duration of the
+worklog in hours.
+
+Based on these inputs, the function calculates and returns the exact start time
+for the worklog.
+
+It establishes the starting weekday based on the DURATION and HOUR. If the
+INITIAL-DATE is a weekday and its time is greater than or equal to DURATION plus
+HOUR, the function uses the weekday of the INITIAL-DATE. Otherwise, it picks the
+closest previous weekday.
+
+The returned value is a time in the format of `encode-time'."
+  (let* ((curr-hour (string-to-number (format-time-string "%H" initial-date)))
+         (use-today (and (>= curr-hour
+                             (+ duration
+                                hour))
+                         (org-jira-weekday-p initial-date)))
+         (last-weekday (if use-today
+                           initial-date
+                         (org-jira-get-previous-weekday-from-time initial-date)))
+         (decoded-time (decode-time last-weekday)))
+    (setf (nth 0 decoded-time) 0)
+    (setf (nth 1 decoded-time)
+          minute)
+    (setf (nth 2 decoded-time)
+          hour)
+    (apply #'encode-time decoded-time)))
+
+(defun org-jira-mini-read-worklog-data ()
   "Read start date and duration for worklog.
 Result is a list with start date in ISO format and duration in seconds."
   (require 'idate nil t)
-  (let* ((start-date
+  (let* ((curr-time (current-time))
+         (prompt (format-time-string "Worklog start time (today is %A, %d %B) "
+                                     curr-time))
+         (default-date (org-jira-calculate-worklog-start-time
+                        curr-time
+                        (car org-jira-default-log-start-time)
+                        (cdr org-jira-default-log-start-time)
+                        org-jira-default-worklog-duration))
+         (start-date
           (if (fboundp 'idate-read)
-              (idate-read "Worklog start time: " (org-jira-last-weekday-at))
-            (org-read-date t t nil "Worklog start time: "
-                           (org-jira-last-weekday-at))))
+              (idate-read prompt
+                          default-date)
+            (org-read-date t t nil prompt
+                           default-date)))
          (iso-start-time (org-jira-mini-time-format-to-iso-date-time
                           start-date
                           "UTC"))
-         (hours (read-number "Hours:" 8))
+         (hours (read-number "Hours:"
+                             org-jira-default-worklog-duration))
          (secs (org-jira-mini-hours-to-seconds hours)))
     (list iso-start-time secs)))
 
@@ -4036,7 +4117,7 @@ Result is a list with start date in ISO format and duration in seconds."
   (when (listp issue-key)
     (setq issue-key (car issue-key)))
   (let* ((args (append (delete nil (list issue-key worklog-id))
-                       (org-jira-mini-read-woklog-data)
+                       (org-jira-mini-read-worklog-data)
                        (list nil)
                        (list nil))))
     (if worklog-id
