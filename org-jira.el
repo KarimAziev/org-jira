@@ -303,7 +303,12 @@ When set to t, will omit the insertion of the matched value from
   :group 'org-jira
   :type 'boolean)
 
-(defcustom org-jira-priority-to-org-priority-alist nil
+(defcustom org-jira-priority-to-org-priority-alist (list (cons "Highest" ?A)
+                                                         (cons "High" ?A)
+                                                         (cons "Medium" ?B)
+                                                         (cons "Minor" ?B)
+                                                         (cons "Low" ?C)
+                                                         (cons "Lowest" ?C))
   "Alist mapping jira priority keywords to `org-mode' priority cookies.
 
 A sample value might be
@@ -313,7 +318,9 @@ A sample value might be
 
 See `org-default-priority' for more info."
   :group 'org-jira
-  :type '(alist :key-type string :value-type character))
+  :type '(alist
+          :key-type string
+          :value-type character))
 
 (defcustom org-jira-boards-default-limit 50
   "Default limit for number of issues retrieved from agile boards."
@@ -868,7 +875,9 @@ project lead."
 
 ;; This is mapped to accountId and not username, so we need nil not blank string.
 (defun org-jira-get-assignable-users (project-key)
-  "Get the list of assignable users for PROJECT-KEY."
+  "Fetch assignable JIRA users for a project.
+
+Argument PROJECT-KEY is a string representing the JIRA project key."
   (append
    '(("Unassigned" . nil))
    org-jira-users
@@ -878,7 +887,9 @@ project lead."
            (jiralib-get-users project-key))))
 
 (defun org-jira-get-reporter-candidates (project-key)
-  "Get the list of assignable users for PROJECT-KEY."
+  "Fetch reporter candidates for a JIRA project.
+
+Argument PROJECT-KEY is a string representing the JIRA project key."
   (append
    org-jira-users
    (mapcar (lambda (user)
@@ -1921,7 +1932,7 @@ purpose of wiping an old subtree."
 
 
 (defun org-jira-get-description-bounds ()
-  "Get the bounds of the description in an `org-jira' issue."
+  "Find bounds of a JIRA issue's description in an Org buffer."
   (save-excursion
     (let ((start (org-jira-get-child-start "description:")))
       (goto-char start)
@@ -1962,7 +1973,7 @@ Argument HEADING is the heading of the child element to search for."
         (point)))))
 
 (defun org-jira-get-description ()
-  "Get the bounds of the description in an `org-jira' issue."
+  "Fetch the JIRA issue description text."
   (pcase-let ((`(,beg . ,end)
                (org-jira-get-description-bounds)))
     (when (and beg end)
@@ -2036,7 +2047,7 @@ Argument ATTACHMENTS is a list of ATTACHMENTS associated with the project."
 
 
 (defun org-jira-get-current-attachments ()
-  "Get the bounds of the description in an `org-jira' issue."
+  "Fetch list of attachments from current Org-Jira issue."
   (when-let ((beg (org-jira-get-child-start "Attachments:")))
     (when beg
       (goto-char beg)
@@ -2588,9 +2599,10 @@ Where issue-id will be something such as \"EX-22\"."
     (org-jira--refresh-issue issue-id)))
 
 (defvar org-jira-fields-values-history nil)
+
 ;;;###autoload
 (defun org-jira-progress-issue ()
-  "Progress issue workflow."
+  "Advance the workflow status of a JIRA issue."
   (interactive)
   (org-jira-ensure-on-issue
     (let* ((issue-id (org-jira-id))
@@ -2661,7 +2673,7 @@ Where issue-id will be something such as \"EX-22\"."
 
 ;;;###autoload
 (defun org-jira-progress-issue-next ()
-  "Progress issue workflow."
+  "Advance the current JIRA issue to its next workflow state."
   (interactive)
   (org-jira-ensure-on-issue
     (let* ((issue-id (org-jira-id))
@@ -2963,11 +2975,11 @@ it is a symbol, it will be converted to string."
    (org-trim (buffer-substring-no-properties (point) (point-max)))))
 
 (defun org-jira-id ()
-  "Get the ID entry for the current heading."
+  "Retrieve the \"ID\" property at the current point in an Org buffer."
   (org-entry-get (point) "ID"))
 
 (defun org-jira-filename ()
-  "Get the ID entry for the current heading."
+  "Retrieve JIRA issue's associated filename."
   (org-jira-get-from-org 'issue 'filename))
 
 ;;;###autoload
@@ -3468,6 +3480,36 @@ It is optional and can be left empty."
        "\\1"
        str))))
 
+;;;###autoload
+(defun org-jira-mini-commit-insert-jira-link ()
+  "Insert JIRA link at end of line based on Git branch."
+  (interactive)
+  (when (and (bound-and-true-p jiralib-url)
+             (string-prefix-p "https://" jiralib-url))
+    (when-let* ((branch
+                 (ignore-errors
+                   (car
+                    (process-lines "git" "rev-parse"
+                                   "--abbrev-ref" "HEAD"))))
+                (issue-key (org-jira-mini-jira-retrieve-issue-key-from-git-branch
+                            branch))
+                (url (concat
+                      "[" issue-key "]" "("
+                      (replace-regexp-in-string "/$" ""
+                                                jiralib-url)
+                      "/browse/"
+                      issue-key
+                      ")"))
+                (buffer (current-buffer)))
+      (unless (save-excursion
+                (goto-char (point-min))
+                (re-search-forward
+                 (regexp-quote url)
+                 nil t 1))
+        (save-excursion
+          (end-of-line)
+          (newline-and-indent 2)
+          (insert url))))))
 
 (defun org-jira-mini-git-commit-setup ()
   "Set up git commit message with Jira issue key and summary from branch name."
@@ -3522,8 +3564,6 @@ It is optional and can be left empty."
           (newline-and-indent 2)
           (insert (format "%s:" url)))))))
 
-(add-hook 'git-commit-setup-hook #'org-jira-mini-git-commit-setup)
-
 
 (defun org-jira-mini-sort-entries (entries)
   (require 'parse-time)
@@ -3577,23 +3617,26 @@ storing them in the variable `org-jira-mini-current-tasks`."
                                                            :title
                                                            elem))
                                                    (props (org-jira-mini-plist-remove-nils
-                                                           (mapcan (lambda (it) (when-let ((val (org-element-property it elem)))
-                                                                                  (list it val)))
-                                                                   '(:UPDATED
-                                                                     :CREATED
-                                                                     :title
-                                                                     :STATUS
-                                                                     :PRIORITY
-                                                                     :todo-keyword
-                                                                     :raw-value
-                                                                     :TYPE-ID
-                                                                     :status
-                                                                     :ID
-                                                                     :COMPONENTS
-                                                                     :REPORTER
-                                                                     :CUSTOM_ID
-                                                                     :TYPE
-                                                                     :FILENAME)))))
+                                                           (mapcan
+                                                            (lambda (it) (when-let
+                                                                             ((val
+                                                                               (org-element-property it elem)))
+                                                                           (list it val)))
+                                                            '(:UPDATED
+                                                              :CREATED
+                                                              :title
+                                                              :STATUS
+                                                              :PRIORITY
+                                                              :todo-keyword
+                                                              :raw-value
+                                                              :TYPE-ID
+                                                              :status
+                                                              :ID
+                                                              :COMPONENTS
+                                                              :REPORTER
+                                                              :CUSTOM_ID
+                                                              :TYPE
+                                                              :FILENAME)))))
                                               (when id
                                                 (setq props (plist-put props :file file))
                                                 (push (cons (concat id " "
@@ -3604,7 +3647,8 @@ storing them in the variable `org-jira-mini-current-tasks`."
                          (setq acc (nconc items acc))))
                      (seq-sort
                       #'file-newer-than-file-p
-                      (org-jira-mini-get-project-filenames)) '()))))
+                      (org-jira-mini-get-project-filenames))
+                     '()))))
 
 (defvar-local org-jira-mini-executing-macro nil)
 
@@ -3667,9 +3711,6 @@ Returns the selected issue."
                                                             pred)))))
          (props (cdr (assoc-string choice alist)))
          (id (plist-get props :CUSTOM_ID)))
-    (message "org-jira-mini-read-issues
-              | Id  | %s"
-             id)
     (if action
         (funcall action id)
       id)))
@@ -3769,6 +3810,7 @@ Argument ISSUE is a list that represents the ISSUE to be normalized."
 
 
 
+;;;###autoload
 (defun org-jira-ivy-read-issue (&optional prompt)
   "Retrieve and display Jira issues assigned to the current user.
 
@@ -3844,7 +3886,7 @@ the function is called."
                 (with-current-buffer buff
                   (setq jira-alist items)
                   (setq org-jira-mini-alist jira-alist)
-                  (setq jira-keys (mapcar 'car items)))
+                  (setq jira-keys (mapcar #'car items)))
                 (ivy-update-candidates
                  jira-keys)
                 (let ((input ivy-text)
@@ -3911,6 +3953,7 @@ the function is called."
           (cdr (assoc label
                       jira-alist)))))))
 
+;;;###autoload
 (defun org-jira-mini-progress-issue ()
   "Progress a Jira issue by applying a workflow action and updating fields."
   (interactive)
@@ -4523,7 +4566,7 @@ If not provided, it defaults to nil."
         (and org-jira-id (string-match (jiralib-get-issue-regexp)
                                        (downcase org-jira-id)))))))
 
-;;;###autoload (autoload 'org-jira-menu "org-jira.el" nil t)
+;;;###autoload (autoload 'org-jira-menu "org-jira" nil t)
 (transient-define-prefix org-jira-menu ()
   "Command dispatcher for Jira commands."
   [["Issues"
@@ -4572,7 +4615,7 @@ If not provided, it defaults to nil."
   (interactive)
   (unless jiralib-token
     (org-jira-mini-login))
-  (transient-setup 'org-jira-menu))
+  (transient-setup #'org-jira-menu))
 
 (provide 'org-jira)
 ;;; org-jira.el ends here
