@@ -1248,7 +1248,7 @@ With a prefix argument, allow you to customize the jql.  See
 
 Argument ID is the identifier of the JIRA issue that the function will retrieve
 and display."
-  
+
   (interactive (list (read-string "Issue ID: " "" 'org-jira-issue-id-history)))
   (org-jira-get-issues (org-jira-get-issue-by-id id))
   (let ((issue-pos (org-find-entry-with-id id)))
@@ -1676,7 +1676,7 @@ Expects input in format such as:
                          (cdr (assoc 'time-spent-seconds worklog))
                          comment-text
                          nil))) ; no callback - synchronous
-                  
+
                   (jiralib-add-worklog
                    issue-id
                    (cdr (assoc 'started worklog))
@@ -2048,13 +2048,13 @@ Argument ATTACHMENTS is a list of ATTACHMENTS associated with the project."
 
 (defun org-jira-get-current-attachments ()
   "Fetch list of attachments from current Org-Jira issue."
-  (when-let ((beg (org-jira-get-child-start "Attachments:")))
+  (when-let* ((beg (org-jira-get-child-start "Attachments:")))
     (when beg
       (goto-char beg)
       (when (org-goto-first-child)
         (let ((replacements))
           (while
-              (when-let ((url (org-entry-get (point) "Content"))
+              (when-let* ((url (org-entry-get (point) "Content"))
                          (filename (org-entry-get (point) "Name")))
                 (push (cons filename url) replacements)
                 (org-goto-sibling)))
@@ -3123,7 +3123,7 @@ Boards is a list of the variable `org-jira-sdk-board' records."
 
 Argument BOARD is a variable that represents a board object with properties such
 as id, name, url, board-type, jql, and limit."
-  
+
 ;;(org-jira-sdk-dump board)
   (with-slots (id name url board-type jql limit) board
     (with-current-buffer (org-jira--get-boards-buffer)
@@ -3360,7 +3360,7 @@ Return the branch name as a string.
 If the branch name is successfully created, copy it to the kill ring and display
 a message.
 If the branch name cannot be created, raise an error with a message."
-  (if-let ((pl (caddr issue)))
+  (if-let* ((pl (caddr issue)))
       (let* ((issuetype (downcase (or (plist-get pl :type) "")))
              (type (or (car (member issuetype '("bug" "feature")))
                        "feature"))
@@ -3618,7 +3618,7 @@ storing them in the variable `org-jira-mini-current-tasks`."
                                                            elem))
                                                    (props (org-jira-mini-plist-remove-nils
                                                            (mapcan
-                                                            (lambda (it) (when-let
+                                                            (lambda (it) (when-let*
                                                                              ((val
                                                                                (org-element-property it elem)))
                                                                            (list it val)))
@@ -3683,7 +3683,7 @@ Returns the selected issue."
                        pl)))
                   (org-jira-mini-init-issues)))
          (annotf (lambda (str)
-                   (when-let ((pl (cdr (assoc-string str alist))))
+                   (when-let* ((pl (cdr (assoc-string str alist))))
                      (let* ((statuses (delq nil
                                             (list
                                              (plist-get pl :todo-keyword)
@@ -3891,7 +3891,7 @@ the function is called."
                  jira-keys)
                 (let ((input ivy-text)
                       (pos
-                       (when-let ((wind
+                       (when-let* ((wind
                                    (active-minibuffer-window)))
                          (with-selected-window
                              wind
@@ -3934,7 +3934,7 @@ the function is called."
                         (aset v 7 ivy--index))))
                   (ivy--reset-state
                    ivy-last)
-                  (when-let ((wind
+                  (when-let* ((wind
                               (active-minibuffer-window)))
                     (with-selected-window
                         wind
@@ -4018,7 +4018,7 @@ ISSUE-STR is a JIRA issue string to fontify."
          (id (pop parts))
          (status (org-jira-mini-s-strip-props (car (reverse parts))))
          (title (string-join (butlast parts) "\s")))
-    (if-let ((face (org-get-todo-face status)))
+    (if-let* ((face (org-get-todo-face status)))
         (concat (propertize id 'face face) "\s" title "\s"
                 (propertize status 'face face))
       issue-str)))
@@ -4028,7 +4028,7 @@ ISSUE-STR is a JIRA issue string to fontify."
 
 (defun org-jira-mini-transfrom-org-isssue (issue)
   "Convert org element with ISSUE to string."
-  (if-let ((pl (caddr issue)))
+  (if-let* ((pl (caddr issue)))
       (org-jira-mini-fontify-issue
        (string-join (delete nil
                             (org-jira-mini-plist-props
@@ -4511,7 +4511,7 @@ This function runs a macro in the minibuffer window using the first four
 characters of a JIRA issue as input.
 When called, this function will run a macro in the minibuffer window using the
 first four characters of a JIRA issue as input."
-  (when-let ((mini (active-minibuffer-window))
+  (when-let* ((mini (active-minibuffer-window))
              (word (car org-jira-mini-issues)))
     (with-selected-window (active-minibuffer-window)
       (setq org-jira-mini-executing-macro t)
