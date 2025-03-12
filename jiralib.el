@@ -40,6 +40,7 @@
 ;; Created: December, 2009
 ;; Keywords: soap, web-services, jira
 ;; Homepage: http://code.google.com/p/emacs-soap-client
+;; Package-Requires: ((emacs "25.1") (request "0.3.2"))
 
 ;;; Commentary:
 
@@ -679,7 +680,7 @@ car is normally used."
 
 DATA is a list of association lists (a SOAP array-of type)
 KEY-FIELD is the field to use as the key in the returned alist
-VALUE-FIELD is the field to use as the value in the returned alist"  
+VALUE-FIELD is the field to use as the value in the returned alist"
   (cl-loop for element in data
         collect (cons (cdr (assoc key-field element))
                       (cdr (assoc value-field element)))))
@@ -914,14 +915,19 @@ Possible side-effects:
   (if (and jiralib-fields-for-action-cache-p action-id)
       (progn
         (unless (assoc action-id jiralib-fields-for-action-cache)
-          (push (cons action-id
-                      (jiralib-call "getFieldsForAction" nil issue-key action-id))
-                jiralib-fields-for-action-cache))
+          (push
+           (cons action-id
+                 (jiralib-call "getFieldsForAction" nil issue-key action-id))
+           jiralib-fields-for-action-cache))
         (cdr (assoc action-id jiralib-fields-for-action-cache)))
     (jiralib-call "getFieldsForAction" nil issue-key action-id)))
 
 (defun jiralib-get-fields-for-action (issue-key action-id)
-  "Return the required fields to change ISSUE-KEY to ACTION-ID."
+  "Retrieve required fields for a JIRA issue transition.
+
+Argument ISSUE-KEY is a string representing the unique identifier of the issue.
+
+Argument ACTION-ID is a string representing the unique identifier of the action."
   (require 'org-jira)
   (if jiralib-use-restapi
       (let ((fields (jiralib-get-fields-for-action-with-cache issue-key
@@ -1131,11 +1137,25 @@ will cache it."
   jiralib-subtask-types-cache)
 
 (defun jiralib-get-comment (issue-key comment-id &optional callback)
-  "Return all comments associated with issue ISSUE-KEY, invoking CALLBACK."
+  "Retrieve a specific comment from a Jira issue using its ID.
+
+Argument ISSUE-KEY is a string representing the unique identifier of the issue.
+
+Argument COMMENT-ID is a string representing the unique identifier of the
+comment.
+
+Optional argument CALLBACK is a function to be called with the result of the
+request."
   (jiralib-call "getComment" callback issue-key comment-id))
 
 (defun jiralib-get-comments (issue-key &optional callback)
-  "Return all comments associated with issue ISSUE-KEY, invoking CALLBACK."
+  "Retrieve comments for a specified issue using its ISSUE-KEY.
+
+Argument ISSUE-KEY is a string representing the unique identifier of the issue
+for which comments are being retrieved.
+
+Optional argument CALLBACK is a function to be executed after the comments are
+retrieved, allowing for asynchronous processing."
   (jiralib-call "getComments" callback issue-key))
 
 (defun jiralib-get-attachments (issue-key &optional callback)

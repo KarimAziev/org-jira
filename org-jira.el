@@ -13,7 +13,7 @@
 ;; URL: https://github.com/KarimAziev/org-jira
 ;; Version: 4.3.3
 ;; Keywords: tools
-;; Package-Requires: ((emacs "28.1") (request "0.2.0") (dash "2.19.1") (org "9.6.7"))
+;; Package-Requires: ((emacs "29.1") (request "0.2.0") (dash "2.19.1"))
 
 
 ;; This file is not part of GNU Emacs.

@@ -1,4 +1,4 @@
-;;; org-jira-sdk.el -- SDK Layer for entities -*- lexical-binding: t; -*-
+;;; org-jira-sdk.el --- Jira SDK -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2018 Matthew Carter <m@ahungry.com>
 ;;
@@ -8,8 +8,11 @@
 ;; Maintainer: Matthew Carter <m@ahungry.com>
 ;; URL: https://github.com/ahungry/org-jira
 ;; Version: 3.1.1
-;; Keywords: ahungry jira org bug tracker
-;; Package-Requires: ((emacs "24.5") (cl-lib "0.5") (request "0.2.0") (s "0.0.0"))
+;; Keywords: extensions outlines
+;; Package-Requires: ((emacs "25.1") (request "0.2.0") (s "0.0.0") (dash "2.19.1"))
+
+;; Author: Karim Aziiev <karim.aziiev@gmail.com>
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This file is not part of GNU Emacs.
 
@@ -69,26 +72,39 @@
     (org-jira-sdk-from-data rec)))
 
 (cl-defmethod org-jira-sdk-hydrate ((rec org-jira-sdk-record) &optional callback)
-  "Populate the record with data from the remote endpoint."
+  "Invoke the hydrate function on a record with optional callback.
+
+Argument REC is an instance of the class `org-jira-sdk-record'.
+
+Optional argument CALLBACK is a function to be called after hydration."
   (with-slots (id hydrate-fn) rec
     (funcall hydrate-fn id callback)))
 
-(cl-defgeneric org-jira-sdk-from-data ((rec org-jira-sdk-record)))
+(cl-defgeneric org-jira-sdk-from-data (rec org-jira-sdk-record))
 
 (cl-defmethod org-jira-sdk-dump ((rec org-jira-sdk-record))
   "A decent pretty print/object dump for working with the class items."
-  (let ((slots (mapcar (lambda (slot) (aref slot 1)) (eieio-class-slots (eieio-object-class rec)))))
+  (let ((slots (mapcar (lambda (slot)
+                         (aref slot 1))
+                       (eieio-class-slots (eieio-object-class rec)))))
     (setq slots (cl-remove-if (lambda (s) (not (slot-boundp rec s))) slots))
     (apply #'concat
-     (mapcar (lambda (slot)
-               (let ((slot (intern (org-jira-sdk-to-string slot))))
-                 (format "\n%+16s:   %s" slot (slot-value rec (intern (org-jira-sdk-to-string slot)))))
-               )
-             slots))))
+           (mapcar
+            (lambda (slot)
+              (let ((slot (intern (org-jira-sdk-to-string slot))))
+                (format "\n%+16s:   %s" slot (slot-value rec (intern (org-jira-sdk-to-string
+                                                                      slot))))))
+            slots))))
 
 (defun org-jira-sdk-path (alist key-chain)
-  "Query a nested path in some type of ALIST by traversing down the keys of KEY-CHAIN."
-  (cl-reduce (lambda (a k) (alist-get k a)) key-chain :initial-value alist))
+  "Return value from ALIST by traversing keys in KEY-CHAIN.
+
+Argument ALIST is an association list from which values are retrieved.
+
+Argument KEY-CHAIN is a list of keys used to traverse the ALIST."
+  (cl-reduce (lambda (a k)
+               (alist-get k a))
+             key-chain :initial-value alist))
 
 (defclass org-jira-sdk-issue (org-jira-sdk-record)
   ((assignee :type (or null string) :initarg :assignee)
@@ -144,14 +160,20 @@
     (funcall hydrate-fn proj-key id callback)))
 
 (cl-defmethod org-jira-sdk-from-data ((rec org-jira-sdk-issue))
-  (cl-flet ((path (keys) (org-jira-sdk-path (oref rec data) keys)))
+  (cl-flet ((path (keys)
+              (org-jira-sdk-path (oref rec data) keys)))
     (org-jira-sdk-issue
      :assignee (path '(fields assignee displayName))
-     :components (mapconcat (lambda (c) (org-jira-sdk-path c '(name))) (path '(fields components)) ", ")
-     :labels (mapconcat (lambda (c) (format "%s" c)) (mapcar #'identity (path '(fields labels))) ", ")
-     :created (path '(fields created))     ; confirm
+     :components (mapconcat (lambda (c)
+                              (org-jira-sdk-path c '(name)))
+                            (path '(fields components)) ", ")
+     :labels (mapconcat (lambda (c)
+                          (format "%s" c))
+                        (mapcar #'identity (path '(fields labels))) ", ")
+     :created (path '(fields created))  ; confirm
      :description (or (path '(fields description)) "")
-     :duedate (or (path '(fields sprint endDate)) (path '(fields duedate)))         ; confirm
+     :duedate (or (path '(fields sprint endDate))
+                  (path '(fields duedate))) ; confirm
      :filename (path '(fields project key))
      :headline (path '(fields summary)) ; Duplicate of summary, maybe different.
      :id (path '(key))
@@ -160,10 +182,12 @@
      :priority (path '(fields priority name))
      :proj-key (path '(fields project key))
      :reporter (path '(fields reporter displayName)) ; reporter could be an object of its own slot values
-     :resolution (path '(fields resolution name))  ; confirm
+     :resolution (path '(fields resolution name))    ; confirm
      :sprint (path '(fields sprint name))
-     :start-date (path '(fields start-date))  ; confirm
-     :status (org-jira-decode (path '(fields status name)))
+     :start-date (path '(fields start-date)) ; confirm
+     :status
+     (when (fboundp 'org-jira-decode)
+       (org-jira-decode (path '(fields status name))))
      :summary (path '(fields summary))
      :type (path '(fields issuetype name))
      :type-id (path '(fields issuetype id))
@@ -223,6 +247,8 @@
 (defun org-jira-sdk-create-board-from-data (d) (org-jira-sdk-create-from-data :board d))
 (defun org-jira-sdk-create-boards-from-data-list (ds) (mapcar #'org-jira-sdk-create-board-from-data ds))
 
-(provide 'org-jira-sdk)
 
+
+;;; org-jira-sdk.el ends here
+(provide 'org-jira-sdk)
 ;;; org-jira-sdk.el ends here
